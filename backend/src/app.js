@@ -4,6 +4,7 @@ const morgan = require('morgan');
 const path = require('path');
 const { initDatabase } = require('./models/database');
 const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
 const studentRoutes = require('./routes/students');
 const behaviorRoutes = require('./routes/behaviors');
 const behaviorTypeRoutes = require('./routes/behaviorTypes');
@@ -21,7 +22,7 @@ ensureUploadDirectories();
 
 // 中间件配置
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
@@ -32,10 +33,11 @@ app.use(morgan('dev'));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // API路由配置
-app.use('/api', authRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/behaviors', behaviorRoutes);
-app.use('/api/behavior-types', behaviorTypeRoutes);
+app.use('/api/behaviorTypes', behaviorTypeRoutes);
 app.use('/api/statistics', statisticsRoutes);
 app.use('/api/upload', uploadRoutes);
 

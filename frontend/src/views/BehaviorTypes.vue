@@ -123,7 +123,7 @@ const excellentTypes = computed(() => {
 const fetchBehaviorTypes = async () => {
   try {
     loading.value = true
-    const response = await axios.get('/api/behavior-types')
+    const response = await axios.get('/api/behaviorTypes')
     behaviorTypes.value = response.data
   } catch (error) {
     console.error('获取行为类型失败:', error)
@@ -151,7 +151,7 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     
     submitting.value = true
-    await axios.post('/api/behavior-types', form.value)
+    await axios.post('/api/behaviorTypes', form.value)
     
     ElMessage.success('添加成功')
     dialogVisible.value = false
@@ -181,7 +181,7 @@ const handleDelete = (row) => {
   )
     .then(async () => {
       try {
-        await axios.delete(`/api/behavior-types/${row.id}`)
+        await axios.delete(`/api/behaviorTypes/${row.id}`)
         ElMessage.success('删除成功')
         fetchBehaviorTypes()
       } catch (error) {

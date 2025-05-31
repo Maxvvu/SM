@@ -3,99 +3,178 @@
     <div class="header">
       <h2>学生管理</h2>
       <div class="header-right">
-        <el-select v-model="filterGrade" placeholder="选择年级" clearable @change="handleFilter" style="margin-right: 10px">
-          <el-option label="高一" value="高一" />
-          <el-option label="高二" value="高二" />
-          <el-option label="高三" value="高三" />
-        </el-select>
-        <el-button type="primary" @click="handleAdd">
-          添加学生
-        </el-button>
+        <div class="search-box">
+          <el-input
+            v-model="searchQuery"
+            placeholder="搜索姓名或学号"
+            clearable
+            @input="handleSearch"
+            class="search-input"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+        </div>
+        <div class="filter-group">
+          <el-select
+            v-model="filterGrade"
+            placeholder="选择年级"
+            clearable
+            @change="handleFilter"
+            class="filter-item"
+          >
+            <el-option
+              v-for="grade in grades"
+              :key="grade"
+              :label="grade"
+              :value="grade"
+            >
+              <el-tag
+                :type="getGradeTagType(grade)"
+                size="small"
+                class="grade-tag"
+              >
+                {{ grade }}
+              </el-tag>
+            </el-option>
+          </el-select>
+
+          <el-select
+            v-model="filterClass"
+            placeholder="选择班级"
+            clearable
+            @change="handleFilter"
+            class="filter-item"
+          >
+            <el-option
+              v-for="classNum in availableClasses"
+              :key="classNum"
+              :label="`${classNum}班`"
+              :value="classNum"
+            />
+          </el-select>
+        </div>
+        <div class="action-group">
+          <el-button type="danger" @click="handleBatchDelete" :disabled="!selectedStudents.length">
+            批量删除
+          </el-button>
+          <el-button type="primary" @click="handleAdd">
+            添加学生
+          </el-button>
+        </div>
       </div>
     </div>
 
-    <el-table 
-      :data="filteredStudents" 
-      style="width: 100%"
-      v-loading="loading"
-      element-loading-text="加载中..."
-      @sort-change="handleSortChange"
-    >
-      <el-table-column prop="name" label="姓名" sortable="custom" />
-      <el-table-column prop="student_id" label="学号" sortable="custom" />
-      <el-table-column prop="grade" label="年级" sortable="custom">
-        <template #default="scope">
-          {{ scope.row.grade || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column prop="class" label="班级" sortable="custom">
-        <template #default="scope">
-          {{ scope.row.class || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column label="照片" width="100">
-        <template #default="scope">
-          <div class="image-container">
-            <el-image
-              v-if="scope.row.photo_url"
-              :src="getImageUrl(scope.row.photo_url)"
-              :preview-src-list="[getImageUrl(scope.row.photo_url)]"
-              :initial-index="0"
-              fit="cover"
-              class="student-photo"
-              preview-teleported
-              hide-on-click-modal
+    <div class="table-container">
+      <el-table 
+        :data="paginatedStudents" 
+        style="width: 100%"
+        v-loading="loading"
+        element-loading-text="加载中..."
+        @sort-change="handleSortChange"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="55" />
+        <el-table-column prop="name" label="姓名" sortable="custom" />
+        <el-table-column prop="student_id" label="学号" sortable="custom" />
+        <el-table-column prop="grade" label="年级" sortable="custom">
+          <template #default="scope">
+            <el-tag
+              :type="getGradeTagType(scope.row.grade)"
+              size="small"
             >
-              <template #error>
-                <div class="image-error">
-                  <el-icon><Picture /></el-icon>
-                </div>
-              </template>
-            </el-image>
-            <el-icon v-else><User /></el-icon>
-          </div>
-        </template>
-      </el-table-column>
-      <el-table-column 
-        prop="violation_count" 
-        label="违纪次数" 
-        sortable="custom"
-        width="100"
-        :sort-orders="['ascending', 'descending']"
-      >
-        <template #default="scope">
-          <el-tag :type="scope.row.violation_count > 0 ? 'danger' : ''">
-            {{ scope.row.violation_count || 0 }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column 
-        prop="excellent_count" 
-        label="优秀表现" 
-        sortable="custom"
-        width="100"
-        :sort-orders="['ascending', 'descending']"
-      >
-        <template #default="scope">
-          <el-tag :type="scope.row.excellent_count > 0 ? 'success' : ''">
-            {{ scope.row.excellent_count || 0 }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
-        <template #default="scope">
-          <el-button
-            size="small"
-            @click="handleEdit(scope.row)"
-          >编辑</el-button>
-          <el-button
-            size="small"
-            type="danger"
-            @click="handleDelete(scope.row)"
-          >删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+              {{ scope.row.grade || '-' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="class" label="班级" sortable="custom">
+          <template #default="scope">
+            <el-tag
+              type="info"
+              size="small"
+              effect="plain"
+            >
+              {{ scope.row.class ? `${scope.row.class}班` : '-' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="照片" width="100">
+          <template #default="scope">
+            <div class="image-container">
+              <el-image
+                v-if="scope.row.photo_url"
+                :src="getImageUrl(scope.row.photo_url)"
+                :preview-src-list="[getImageUrl(scope.row.photo_url)]"
+                :initial-index="0"
+                fit="cover"
+                class="student-photo"
+                preview-teleported
+                hide-on-click-modal
+              >
+                <template #error>
+                  <div class="image-error">
+                    <el-icon><Picture /></el-icon>
+                  </div>
+                </template>
+              </el-image>
+              <el-icon v-else><User /></el-icon>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column 
+          prop="violation_count" 
+          label="违纪次数" 
+          sortable="custom"
+          width="100"
+          :sort-orders="['ascending', 'descending']"
+        >
+          <template #default="scope">
+            <el-tag :type="scope.row.violation_count > 0 ? 'danger' : ''">
+              {{ scope.row.violation_count || 0 }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column 
+          prop="excellent_count" 
+          label="优秀表现" 
+          sortable="custom"
+          width="100"
+          :sort-orders="['ascending', 'descending']"
+        >
+          <template #default="scope">
+            <el-tag :type="scope.row.excellent_count > 0 ? 'success' : ''">
+              {{ scope.row.excellent_count || 0 }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="200" fixed="right">
+          <template #default="scope">
+            <el-button
+              size="small"
+              @click="handleEdit(scope.row)"
+            >编辑</el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click="handleDelete(scope.row)"
+            >删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="filteredStudents.length"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
+      </div>
+    </div>
 
     <el-dialog
       v-model="dialogVisible"
@@ -196,14 +275,16 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { User, Plus, Picture } from '@element-plus/icons-vue'
+import { User, Plus, Picture, Search } from '@element-plus/icons-vue'
 
 const students = ref([])
 const dialogVisible = ref(false)
 const loading = ref(false)
 const filterGrade = ref('')
+const filterClass = ref('')
 const sortBy = ref('')
 const sortOrder = ref('')
+const searchQuery = ref('')
 
 const form = ref({
   name: '',
@@ -231,57 +312,157 @@ const rules = {
   grade: [
     { required: true, message: '请选择年级', trigger: 'change' }
   ],
+  class: [
+    { required: true, message: '请输入班级', trigger: 'blur' },
+    { 
+      validator: (rule, value, callback) => {
+        if (!value) {
+          callback(new Error('请输入班级'))
+        } else {
+          // 移除可能存在的"班"字后验证
+          const classValue = value.trim().replace(/班$/, '')
+          if (!classValue) {
+            callback(new Error('班级不能为空'))
+          } else if (classValue.length > 10) {
+            callback(new Error('班级名称不能超过10个字符'))
+          } else if (/^[1-9][0-9]?$/.test(classValue)) {
+            // 如果是1-99的数字，直接通过
+            callback()
+          } else if (/^[\u4e00-\u9fa5a-zA-Z0-9]+$/.test(classValue)) {
+            // 如果包含中文、字母、数字的组合，通过
+            callback()
+          } else {
+            callback(new Error('班级只能包含中文、字母和数字'))
+          }
+        }
+      },
+      trigger: 'blur'
+    }
+  ],
   emergency_phone: [
     { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', trigger: 'blur' }
   ]
 }
 
-// 过滤后的学生列表
+// 预定义年级列表
+const grades = ['高一', '高二', '高三']
+
+// 获取可用的班级列表
+const availableClasses = computed(() => {
+  const classSet = new Set()
+  students.value.forEach(student => {
+    if (student.class && (!filterGrade.value || student.grade === filterGrade.value)) {
+      // 移除末尾的"班"字（如果有）
+      const className = student.class.replace(/班$/, '')
+      if (className) {
+        classSet.add(className)
+      }
+    }
+  })
+  return Array.from(classSet).sort((a, b) => {
+    // 如果都是数字，按数字大小排序
+    if (/^\d+$/.test(a) && /^\d+$/.test(b)) {
+      return parseInt(a) - parseInt(b)
+    }
+    // 否则按字符串排序
+    return a.localeCompare(b, 'zh-CN')
+  })
+})
+
+// 根据年级获取标签类型
+const getGradeTagType = (grade) => {
+  switch (grade) {
+    case '高一':
+      return 'success'
+    case '高二':
+      return 'warning'
+    case '高三':
+      return 'danger'
+    default:
+      return 'info'
+  }
+}
+
+// 添加分页相关的响应式变量
+const currentPage = ref(1)
+const pageSize = ref(10)
+
+// 修改过滤后的学生列表计算属性
 const filteredStudents = computed(() => {
   let result = [...students.value]
   
-  // 年级筛选
+  // 搜索过滤
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase()
+    result = result.filter(student => 
+      student.name.toLowerCase().includes(query) || 
+      student.student_id.toString().includes(query)
+    )
+  }
+  
+  // 年级过滤
   if (filterGrade.value) {
     result = result.filter(student => student.grade === filterGrade.value)
   }
   
-  // 排序
+  // 班级过滤
+  if (filterClass.value) {
+    result = result.filter(student => student.class === filterClass.value)
+  }
+
+  // 排序处理
   if (sortBy.value && sortOrder.value) {
+    const order = sortOrder.value === 'ascending' ? 1 : -1
     result.sort((a, b) => {
-      let aValue = a[sortBy.value] || 0
-      let bValue = b[sortBy.value] || 0
-      
-      if (typeof aValue === 'string') {
-        aValue = aValue.toLowerCase()
-        bValue = bValue.toLowerCase()
+      if (sortBy.value === 'violation_count' || sortBy.value === 'excellent_count') {
+        return (a[sortBy.value] || 0) > (b[sortBy.value] || 0) ? order : -order
       }
-      
-      if (sortOrder.value === 'ascending') {
-        return aValue > bValue ? 1 : -1
-      } else {
-        return aValue < bValue ? 1 : -1
-      }
+      return a[sortBy.value] > b[sortBy.value] ? order : -order
     })
   }
   
   return result
 })
 
-// 处理排序
+// 添加分页数据计算属性
+const paginatedStudents = computed(() => {
+  const startIndex = (currentPage.value - 1) * pageSize.value
+  return filteredStudents.value.slice(startIndex, startIndex + pageSize.value)
+})
+
+// 处理页码变化
+const handleCurrentChange = (val) => {
+  currentPage.value = val
+}
+
+// 处理每页显示数量变化
+const handleSizeChange = (val) => {
+  pageSize.value = val
+  // 重置到第一页
+  currentPage.value = 1
+}
+
+// 修改筛选和搜索处理函数，添加重置页码逻辑
+const handleSearch = () => {
+  currentPage.value = 1
+}
+
+const handleFilter = () => {
+  // 如果切换年级，清空班级筛选
+  if (filterGrade.value === '') {
+    filterClass.value = ''
+  }
+  // 重置页码
+  currentPage.value = 1
+}
+
+// 修改排序处理函数，添加重置页码逻辑
 const handleSortChange = ({ prop, order }) => {
   sortBy.value = prop
   sortOrder.value = order
+  // 重置页码
+  currentPage.value = 1
 }
-
-// 处理筛选
-const handleFilter = () => {
-  // 筛选会自动通过计算属性处理
-}
-
-// 添加上传请求头
-const uploadHeaders = computed(() => ({
-  'Authorization': `Bearer ${localStorage.getItem('token')}`
-}))
 
 const handleAdd = () => {
   form.value = {
@@ -419,26 +600,15 @@ const handleSubmit = async () => {
     
     loading.value = true
     
-    // 在构建submitData前检查表单数据
-    console.log('表单完整数据:', {
-      id: form.value.id,
-      name: form.value.name,
-      student_id: form.value.student_id,
-      grade: form.value.grade,
-      class: form.value.class,
-      photo_url: form.value.photo_url,  // 明确列出photo_url
-      address: form.value.address,
-      emergency_contact: form.value.emergency_contact,
-      emergency_phone: form.value.emergency_phone,
-      notes: form.value.notes
-    })
+    // 处理班级数据，移除末尾的"班"字（如果有）
+    const classValue = form.value.class?.trim().replace(/班$/, '')
     
     const submitData = {
       name: form.value.name?.trim() || '',
       student_id: form.value.student_id?.trim() || '',
       grade: form.value.grade || '',
-      class: form.value.class?.trim() || '',
-      photo_url: form.value.photo_url || '',  // 确保不会是undefined
+      class: classValue,  // 使用处理后的班级值
+      photo_url: form.value.photo_url || '',
       address: form.value.address?.trim() || '',
       emergency_contact: form.value.emergency_contact?.trim() || '',
       emergency_phone: form.value.emergency_phone?.trim() || '',
@@ -525,6 +695,53 @@ const handleSubmit = async () => {
   }
 }
 
+// 添加选中学生数组
+const selectedStudents = ref([])
+
+// 处理选择变化
+const handleSelectionChange = (selection) => {
+  selectedStudents.value = selection
+}
+
+// 处理批量删除
+const handleBatchDelete = () => {
+  if (!selectedStudents.value.length) return
+  
+  ElMessageBox.confirm(
+    `确定要删除选中的 ${selectedStudents.value.length} 名学生吗？`,
+    '警告',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  )
+    .then(async () => {
+      try {
+        loading.value = true
+        // 创建删除请求的Promise数组
+        const deletePromises = selectedStudents.value.map(student => 
+          axios.delete(`/api/students/${student.id}`)
+        )
+        
+        // 等待所有删除请求完成
+        await Promise.all(deletePromises)
+        
+        ElMessage.success('批量删除成功')
+        // 重新获取学生列表
+        await fetchStudents()
+      } catch (error) {
+        console.error('批量删除失败:', error)
+        ElMessage.error('批量删除失败')
+      } finally {
+        loading.value = false
+      }
+    })
+    .catch(() => {
+      // 用户取消删除操作
+    })
+}
+
 onMounted(() => {
   fetchStudents()
 })
@@ -545,12 +762,59 @@ onMounted(() => {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 16px;
 }
 
-.dialog-footer {
+.search-box {
+  flex: 1;
+  max-width: 300px;
+}
+
+.search-input {
+  width: 100%;
+}
+
+:deep(.el-input__wrapper) {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+:deep(.el-input__wrapper:hover) {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+:deep(.el-input__prefix) {
+  color: var(--el-text-color-secondary);
+  margin-right: 4px;
+}
+
+.filter-group {
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
+}
+
+.filter-item {
+  min-width: 120px;
+}
+
+.action-group {
+  display: flex;
+  gap: 12px;
+}
+
+.grade-tag {
+  width: 100%;
+  text-align: center;
+}
+
+/* 确保表格内的标签居中显示 */
+.el-table .el-tag {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 60px;
+}
+
+.el-button + .el-button {
+  margin-left: 0;
 }
 
 .avatar-uploader {
@@ -644,5 +908,78 @@ onMounted(() => {
   max-width: 90%;
   max-height: 90%;
   object-fit: contain;
+}
+
+.table-container {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding: 10px 0;
+}
+
+:deep(.el-pagination) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+:deep(.el-pagination .el-select .el-input) {
+  width: 120px;
+}
+
+:deep(.el-pagination .el-pagination__total) {
+  margin-right: 16px;
+}
+
+:deep(.el-pagination .el-pagination__sizes) {
+  margin-right: 16px;
+}
+
+:deep(.el-pagination button) {
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-pagination button:hover) {
+  background-color: var(--el-color-primary-light-7);
+  color: var(--el-color-primary);
+}
+
+:deep(.el-pagination .el-pager li) {
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-pagination .el-pager li:hover) {
+  background-color: var(--el-color-primary-light-7);
+}
+
+:deep(.el-pagination .el-pager li.active) {
+  background-color: var(--el-color-primary);
+  color: white;
+}
+
+@media screen and (max-width: 768px) {
+  .pagination-container {
+    justify-content: center;
+  }
+  
+  :deep(.el-pagination) {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
 }
 </style> 

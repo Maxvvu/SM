@@ -1,67 +1,270 @@
 <template>
   <div class="behaviors-container">
-    <div class="header">
-      <h2>行为记录管理</h2>
-      <div class="header-right">
-        <el-select v-model="filterGrade" placeholder="选择年级" clearable @change="handleFilter" style="margin-right: 10px">
-          <el-option label="高一" value="高一" />
-          <el-option label="高二" value="高二" />
-          <el-option label="高三" value="高三" />
-        </el-select>
-        <el-select v-model="filterType" placeholder="行为类型" clearable @change="handleFilter" style="margin-right: 10px">
-          <el-option-group label="违纪行为">
-            <el-option
-              v-for="type in behaviorTypes.filter(t => t.category === '违纪')"
-              :key="type.id"
-              :label="type.name"
-              :value="type.name"
-            />
-          </el-option-group>
-          <el-option-group label="优秀表现">
-            <el-option
-              v-for="type in behaviorTypes.filter(t => t.category === '优秀')"
-              :key="type.id"
-              :label="type.name"
-              :value="type.name"
-            />
-          </el-option-group>
-        </el-select>
-        <el-button type="primary" @click="handleAdd">
-          添加记录
-        </el-button>
+    <div class="page-header">
+      <div class="title-section">
+        <h2>行为记录管理</h2>
+        <el-tag type="info" effect="plain" class="total-count">
+          共 {{ filteredBehaviors.length }} 条记录
+        </el-tag>
+      </div>
+      <div class="header-content">
+        <div class="search-section">
+          <div class="search-box">
+            <el-input
+              v-model="searchQuery"
+              placeholder="搜索学生姓名或描述"
+              clearable
+              @input="handleSearch"
+              class="search-input"
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+            </el-input>
+          </div>
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            :shortcuts="dateShortcuts"
+            value-format="YYYY-MM-DD"
+            @change="handleFilter"
+            class="date-picker"
+          />
+        </div>
+        <div class="filter-section">
+          <div class="filter-group">
+            <el-select 
+              v-model="filterGrade" 
+              placeholder="选择年级" 
+              clearable 
+              @change="handleFilter"
+              class="filter-select"
+            >
+              <template #prefix>
+                <el-icon><School /></el-icon>
+              </template>
+              <el-option label="高一" value="高一">
+                <el-tag type="success" size="small">高一</el-tag>
+              </el-option>
+              <el-option label="高二" value="高二">
+                <el-tag type="warning" size="small">高二</el-tag>
+              </el-option>
+              <el-option label="高三" value="高三">
+                <el-tag type="danger" size="small">高三</el-tag>
+              </el-option>
+            </el-select>
+            <el-select 
+              v-model="filterCategory" 
+              placeholder="行为类别" 
+              clearable 
+              @change="handleFilter"
+              class="filter-select"
+            >
+              <template #prefix>
+                <el-icon><Collection /></el-icon>
+              </template>
+              <el-option label="优秀行为" value="优秀">
+                <div class="custom-option">
+                  <el-icon class="option-icon" color="#67C23A"><CircleCheckFilled /></el-icon>
+                  <span>优秀行为</span>
+                </div>
+              </el-option>
+              <el-option label="违纪行为" value="违纪">
+                <div class="custom-option">
+                  <el-icon class="option-icon" color="#F56C6C"><WarningFilled /></el-icon>
+                  <span>违纪行为</span>
+                </div>
+              </el-option>
+            </el-select>
+            <el-select 
+              v-model="filterType" 
+              placeholder="行为类型" 
+              clearable 
+              @change="handleFilter"
+              class="filter-select"
+            >
+              <template #prefix>
+                <el-icon><List /></el-icon>
+              </template>
+              <el-option-group label="违纪行为">
+                <el-option
+                  v-for="type in behaviorTypes.filter(t => t.category === '违纪')"
+                  :key="type.id"
+                  :label="type.name"
+                  :value="type.name"
+                >
+                  <div class="custom-option">
+                    <el-icon class="option-icon" color="#F56C6C"><WarningFilled /></el-icon>
+                    <span>{{ type.name }}</span>
+                  </div>
+                </el-option>
+              </el-option-group>
+              <el-option-group label="优秀表现">
+                <el-option
+                  v-for="type in behaviorTypes.filter(t => t.category === '优秀')"
+                  :key="type.id"
+                  :label="type.name"
+                  :value="type.name"
+                >
+                  <div class="custom-option">
+                    <el-icon class="option-icon" color="#67C23A"><CircleCheckFilled /></el-icon>
+                    <span>{{ type.name }}</span>
+                  </div>
+                </el-option>
+              </el-option-group>
+            </el-select>
+          </div>
+          <div class="action-group">
+            <el-button type="primary" @click="handleAdd" class="add-button">
+              <el-icon><Plus /></el-icon>
+              <span>添加记录</span>
+            </el-button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <el-table 
-      :data="filteredBehaviors" 
-      style="width: 100%"
-      v-loading="loading"
+    <div class="table-container">
+      <el-table 
+        :data="paginatedBehaviors" 
+        style="width: 100%"
+        v-loading="loading"
+        :header-cell-style="{ background: 'var(--el-color-primary-light-9)', color: 'var(--el-text-color-primary)' }"
+        :row-class-name="rowClassName"
+        @row-click="handleRowClick"
+        ref="tableRef"
+      >
+        <el-table-column prop="student_name" label="学生姓名" sortable />
+        <el-table-column prop="grade" label="年级" sortable width="100" />
+        <el-table-column prop="class" label="班级" sortable width="100" />
+        <el-table-column prop="behavior_type" label="行为类型" width="120">
+          <template #default="scope">
+            <el-tag :type="getBehaviorType(scope.row.behavior_type)">
+              {{ scope.row.behavior_type }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="description" label="描述" show-overflow-tooltip />
+        <el-table-column label="图片" width="100">
+          <template #default="scope">
+            <div class="image-container">
+              <div v-if="scope.row.image_url" class="image-preview">
+                <el-image
+                  :src="getImageUrl(scope.row.image_url)"
+                  :preview-src-list="[getImageUrl(scope.row.image_url)]"
+                  preview-teleported
+                  :initial-index="0"
+                  fit="cover"
+                  :hide-on-click-modal="false"
+                  class="behavior-image-thumb"
+                  @load="handleImageLoad(scope.row)"
+                  @error="handleImageLoadError(scope.row)"
+                >
+                  <template #error>
+                    <div class="image-error">
+                      <el-icon><Picture /></el-icon>
+                      <span>加载失败</span>
+                    </div>
+                  </template>
+                  <template #placeholder>
+                    <div class="image-loading">
+                      <el-icon><Loading /></el-icon>
+                      <span>加载中</span>
+                    </div>
+                  </template>
+                </el-image>
+              </div>
+              <span v-else class="no-image">无图片</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="date" label="记录时间" sortable width="180">
+          <template #default="scope">
+            {{ new Date(scope.row.date).toLocaleString() }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="180" fixed="right">
+          <template #default="scope">
+            <el-button
+              size="small"
+              type="primary"
+              @click.stop="handleEdit(scope.row)"
+            >修改</el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click.stop="handleDelete(scope.row)"
+            >删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="filteredBehaviors.length"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
+      </div>
+    </div>
+
+    <!-- 添加详情对话框 -->
+    <el-dialog
+      v-model="detailDialogVisible"
+      title="行为记录详情"
+      width="600px"
+      class="behavior-detail-dialog"
     >
-      <el-table-column prop="student_name" label="学生姓名" sortable />
-      <el-table-column prop="grade" label="年级" sortable width="100" />
-      <el-table-column prop="class" label="班级" sortable width="100" />
-      <el-table-column prop="behavior_type" label="行为类型" width="120">
-        <template #default="scope">
-          <el-tag :type="getBehaviorType(scope.row.behavior_type)">
-            {{ scope.row.behavior_type }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="description" label="描述" show-overflow-tooltip />
-      <el-table-column label="图片" width="100">
-        <template #default="scope">
-          <div class="image-container">
-            <div v-if="scope.row.image_url" class="image-preview">
+      <div class="detail-content" v-if="selectedBehavior">
+        <div class="detail-header">
+          <div class="student-info">
+            <h3>{{ selectedBehavior.student_name }}</h3>
+            <div class="student-meta">
+              <el-tag :type="getGradeTagType(selectedBehavior.grade)" size="small">
+                {{ selectedBehavior.grade }}
+              </el-tag>
+              <el-tag type="info" size="small" effect="plain">
+                {{ selectedBehavior.class }}班
+              </el-tag>
+            </div>
+          </div>
+          <div class="behavior-type">
+            <el-tag :type="getBehaviorType(selectedBehavior.behavior_type)" size="large">
+              {{ selectedBehavior.behavior_type }}
+            </el-tag>
+          </div>
+        </div>
+
+        <el-divider />
+
+        <div class="detail-body">
+          <div class="detail-item">
+            <label>记录时间：</label>
+            <span>{{ new Date(selectedBehavior.date).toLocaleString() }}</span>
+          </div>
+
+          <div class="detail-item description">
+            <label>详细描述：</label>
+            <p>{{ selectedBehavior.description }}</p>
+          </div>
+
+          <div class="detail-item image" v-if="selectedBehavior.image_url">
+            <label>相关图片：</label>
+            <div class="image-preview">
               <el-image
-                :src="getImageUrl(scope.row.image_url)"
-                :preview-src-list="[getImageUrl(scope.row.image_url)]"
+                :src="getImageUrl(selectedBehavior.image_url)"
+                :preview-src-list="[getImageUrl(selectedBehavior.image_url)]"
                 preview-teleported
                 :initial-index="0"
-                fit="cover"
-                :hide-on-click-modal="false"
-                class="behavior-image-thumb"
-                @load="handleImageLoad(scope.row)"
-                @error="handleImageLoadError(scope.row)"
+                fit="contain"
+                class="detail-image"
               >
                 <template #error>
                   <div class="image-error">
@@ -69,38 +272,12 @@
                     <span>加载失败</span>
                   </div>
                 </template>
-                <template #placeholder>
-                  <div class="image-loading">
-                    <el-icon><Loading /></el-icon>
-                    <span>加载中</span>
-                  </div>
-                </template>
               </el-image>
             </div>
-            <span v-else class="no-image">无图片</span>
           </div>
-        </template>
-      </el-table-column>
-      <el-table-column prop="date" label="记录时间" sortable width="180">
-        <template #default="scope">
-          {{ new Date(scope.row.date).toLocaleString() }}
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
-        <template #default="scope">
-          <el-button
-            size="small"
-            type="primary"
-            @click="handleEdit(scope.row)"
-          >修改</el-button>
-          <el-button
-            size="small"
-            type="danger"
-            @click="handleDelete(scope.row)"
-          >删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+        </div>
+      </div>
+    </el-dialog>
 
     <!-- 添加/修改行为记录对话框 -->
     <el-dialog
@@ -209,7 +386,18 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Picture, Loading } from '@element-plus/icons-vue'
+import { 
+  Plus, 
+  Picture, 
+  Loading, 
+  School, 
+  Collection, 
+  List,
+  CircleCheckFilled,
+  WarningFilled,
+  Search,
+  Calendar
+} from '@element-plus/icons-vue'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -218,8 +406,15 @@ const behaviors = ref([])
 const students = ref([])
 const behaviorTypes = ref([])
 const filterGrade = ref('')
+const filterCategory = ref('')
 const filterType = ref('')
 const formRef = ref(null)
+const searchQuery = ref('')
+const dateRange = ref(null)
+
+// 添加分页相关的响应式变量
+const currentPage = ref(1)
+const pageSize = ref(10)
 
 const form = ref({
   id: null,
@@ -246,25 +441,114 @@ const rules = {
   ]
 }
 
-// 过滤后的行为记录
+// 日期快捷选项
+const dateShortcuts = [
+  {
+    text: '最近一周',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 7)
+      return [start, end]
+    },
+  },
+  {
+    text: '最近一个月',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 30)
+      return [start, end]
+    },
+  },
+  {
+    text: '最近三个月',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 90)
+      return [start, end]
+    },
+  }
+]
+
+// 修改数据过滤和分页逻辑
 const filteredBehaviors = computed(() => {
   let result = [...behaviors.value]
   
-  // 年级筛选
-  if (filterGrade.value) {
+  // 搜索过滤
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase()
+    result = result.filter(behavior => 
+      behavior.student_name.toLowerCase().includes(query) || 
+      behavior.description.toLowerCase().includes(query)
+    )
+  }
+  
+  // 日期范围过滤
+  if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
+    const startDate = new Date(dateRange.value[0])
+    const endDate = new Date(dateRange.value[1])
+    endDate.setHours(23, 59, 59, 999)
+    
     result = result.filter(behavior => {
-      const student = students.value.find(s => s.id === behavior.student_id)
-      return student && student.grade === filterGrade.value
+      const behaviorDate = new Date(behavior.date)
+      return behaviorDate >= startDate && behaviorDate <= endDate
     })
   }
+  
+  // 年级过滤
+  if (filterGrade.value) {
+    result = result.filter(b => b.grade === filterGrade.value)
+  }
+  
+  // 行为类别过滤
+  if (filterCategory.value) {
+    const categoryTypes = behaviorTypes.value
+      .filter(t => t.category === filterCategory.value)
+      .map(t => t.name)
+    result = result.filter(b => categoryTypes.includes(b.behavior_type))
+  }
 
-  // 行为类型筛选
+  // 具体行为类型过滤
   if (filterType.value) {
-    result = result.filter(behavior => behavior.behavior_type === filterType.value)
+    result = result.filter(b => b.behavior_type === filterType.value)
   }
   
   return result
 })
+
+// 添加分页数据计算属性
+const paginatedBehaviors = computed(() => {
+  const startIndex = (currentPage.value - 1) * pageSize.value
+  return filteredBehaviors.value.slice(startIndex, startIndex + pageSize.value)
+})
+
+// 处理页码变化
+const handleCurrentChange = (val) => {
+  currentPage.value = val
+}
+
+// 处理每页显示数量变化
+const handleSizeChange = (val) => {
+  pageSize.value = val
+  // 重置到第一页
+  currentPage.value = 1
+}
+
+// 修改筛选和搜索处理函数，添加重置页码逻辑
+const handleSearch = () => {
+  currentPage.value = 1
+}
+
+const handleFilter = () => {
+  // 如果选择了新的类别，清空具体行为类型的选择
+  if (filterCategory.value) {
+    filterType.value = ''
+  }
+  // 重置页码
+  currentPage.value = 1
+}
 
 // 获取行为记录列表
 const fetchBehaviors = async () => {
@@ -319,7 +603,7 @@ const fetchStudents = async () => {
 // 获取行为类型列表
 const fetchBehaviorTypes = async () => {
   try {
-    const response = await axios.get('/api/behavior-types')
+    const response = await axios.get('/api/behaviorTypes')
     behaviorTypes.value = response.data
   } catch (error) {
     console.error('获取行为类型失败:', error)
@@ -533,36 +817,30 @@ const handleDelete = (row) => {
       try {
         console.log('正在删除记录:', row.id)
         
-        // 使用统一的API接口
-        const response = await axios.delete('/api/behaviors/'+row.id, {
-          action: 'delete',
-          id: row.id
-        })
+        const response = await axios.delete(`/api/behaviors/${row.id}`)
         
         console.log('删除响应:', response)
         
         // 检查响应状态
-        if (!response || !response.data) {
-          throw new Error('服务器响应异常')
-        }
-        
-        // 从本地数据中移除
-        const index = behaviors.value.findIndex(b => b.id === row.id)
-        if (index !== -1) {
-          behaviors.value.splice(index, 1)
-          console.log('本地数据已更新，移除索引:', index)
-          ElMessage.success('删除成功')
+        if (response.status === 204 || (response.status === 200 && response.data)) {
+          // 从本地数据中移除
+          const index = behaviors.value.findIndex(b => b.id === row.id)
+          if (index !== -1) {
+            behaviors.value.splice(index, 1)
+            console.log('本地数据已更新，移除索引:', index)
+            ElMessage.success('删除成功')
+          } else {
+            console.warn('在本地数据中未找到要删除的记录:', row.id)
+            // 刷新列表
+            await fetchBehaviors()
+            ElMessage.success('删除成功，已刷新列表')
+          }
         } else {
-          console.warn('在本地数据中未找到要删除的记录:', row.id)
-          ElMessage.success('删除成功，正在刷新列表')
+          throw new Error('删除失败：服务器响应异常')
         }
-        
-        // 刷新列表以确保数据同步
-        await fetchBehaviors()
       } catch (error) {
         console.error('删除行为记录失败:', error)
         
-        // 构建错误消息
         let errorMessage = '删除失败'
         if (error.response) {
           const { status, data } = error.response
@@ -571,6 +849,9 @@ const handleDelete = (row) => {
           switch (status) {
             case 404:
               errorMessage = '找不到要删除的记录'
+              break
+            case 403:
+              errorMessage = '没有删除权限'
               break
             case 400:
               errorMessage = data?.message || '请求参数错误'
@@ -581,23 +862,23 @@ const handleDelete = (row) => {
             default:
               errorMessage = data?.message || '删除失败，请稍后重试'
           }
-          
-          // 如果是404错误，刷新列表
-          if (status === 404) {
-            await fetchBehaviors()
-          }
+        } else if (error.request) {
+          errorMessage = '网络请求失败，请检查网络连接'
         }
         
         ElMessage.error(errorMessage)
+        
+        // 如果是404错误，刷新列表
+        if (error.response?.status === 404) {
+          await fetchBehaviors()
+        }
         
         // 记录详细错误信息
         console.log('删除操作错误详情:', {
           error,
           response: error.response,
-          request: {
-            id: row.id,
-            action: 'delete'
-          }
+          request: error.request,
+          config: error.config
         })
       }
     })
@@ -605,11 +886,6 @@ const handleDelete = (row) => {
       // 用户取消删除操作
       ElMessage.info('已取消删除')
     })
-}
-
-// 处理筛选
-const handleFilter = () => {
-  // 筛选会自动通过计算属性处理
 }
 
 const getImageUrl = (url) => {
@@ -654,6 +930,34 @@ const imageProps = {
   loading: 'lazy'
 }
 
+// 添加详情对话框相关的响应式变量
+const detailDialogVisible = ref(false)
+const selectedBehavior = ref(null)
+
+// 添加行点击事件处理函数
+const handleRowClick = (row) => {
+  selectedBehavior.value = row
+  detailDialogVisible.value = true
+}
+
+// 修改表格组件，添加行点击事件
+const tableRef = ref(null)
+const rowClassName = () => 'clickable-row'
+
+// 添加年级标签类型函数
+const getGradeTagType = (grade) => {
+  switch (grade) {
+    case '高一':
+      return 'success'
+    case '高二':
+      return 'warning'
+    case '高三':
+      return 'danger'
+    default:
+      return 'info'
+  }
+}
+
 onMounted(() => {
   fetchBehaviors()
   fetchStudents()
@@ -676,6 +980,68 @@ onMounted(() => {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 16px;
+}
+
+.header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.search-section {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.search-box {
+  flex: 1;
+  min-width: 250px;
+  max-width: 300px;
+}
+
+.date-picker {
+  width: 320px;
+  transition: all 0.3s ease;
+}
+
+.filter-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.filter-group {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+}
+
+.filter-select {
+  min-width: 140px;
+  flex: 1;
+  transition: all 0.3s ease;
+}
+
+.action-group {
+  display: flex;
+  gap: 12px;
+  margin-left: 16px;
+}
+
+.add-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  transition: all 0.3s;
+}
+
+.add-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .dialog-footer {
@@ -804,5 +1170,245 @@ onMounted(() => {
   font-size: 12px;
   color: #606266;
   margin-top: 5px;
+}
+
+:deep(.el-input__wrapper) {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+:deep(.el-input__wrapper:hover) {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+:deep(.el-input__prefix) {
+  color: var(--el-text-color-secondary);
+  margin-right: 4px;
+}
+
+:deep(.el-range-editor.el-input__wrapper) {
+  padding: 0 10px;
+}
+
+:deep(.el-range-separator) {
+  color: var(--el-text-color-placeholder);
+}
+
+@media screen and (max-width: 768px) {
+  .search-section,
+  .filter-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-box {
+    max-width: none;
+  }
+  
+  .date-picker {
+    width: 100%;
+  }
+  
+  .filter-group {
+    flex-direction: column;
+  }
+  
+  .filter-select {
+    width: 100%;
+  }
+  
+  .action-group {
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding: 10px 0;
+}
+
+:deep(.el-pagination) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+:deep(.el-pagination .el-select .el-input) {
+  width: 120px;
+}
+
+:deep(.el-pagination .el-pagination__total) {
+  margin-right: 16px;
+}
+
+:deep(.el-pagination .el-pagination__sizes) {
+  margin-right: 16px;
+}
+
+:deep(.el-pagination button) {
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-pagination button:hover) {
+  background-color: var(--el-color-primary-light-7);
+  color: var(--el-color-primary);
+}
+
+:deep(.el-pagination .el-pager li) {
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-pagination .el-pager li:hover) {
+  background-color: var(--el-color-primary-light-7);
+}
+
+:deep(.el-pagination .el-pager li.active) {
+  background-color: var(--el-color-primary);
+  color: white;
+}
+
+@media screen and (max-width: 768px) {
+  .pagination-container {
+    justify-content: center;
+  }
+  
+  :deep(.el-pagination) {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+}
+
+/* 添加详情对话框相关样式 */
+.behavior-detail-dialog {
+  :deep(.el-dialog__body) {
+    padding: 20px;
+  }
+}
+
+.detail-content {
+  padding: 10px;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.student-info {
+  h3 {
+    margin: 0 0 10px 0;
+    font-size: 20px;
+    color: var(--el-text-color-primary);
+  }
+}
+
+.student-meta {
+  display: flex;
+  gap: 8px;
+}
+
+.behavior-type {
+  .el-tag {
+    font-size: 16px;
+    padding: 8px 16px;
+  }
+}
+
+.detail-body {
+  .detail-item {
+    margin-bottom: 20px;
+    
+    label {
+      display: block;
+      color: var(--el-text-color-secondary);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    
+    span {
+      color: var(--el-text-color-primary);
+    }
+    
+    &.description {
+      p {
+        margin: 0;
+        line-height: 1.6;
+        color: var(--el-text-color-primary);
+        white-space: pre-wrap;
+      }
+    }
+    
+    &.image {
+      .image-preview {
+        margin-top: 10px;
+        
+        .detail-image {
+          max-width: 100%;
+          max-height: 300px;
+          border-radius: 4px;
+          box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+        }
+      }
+    }
+  }
+}
+
+/* 添加可点击行的样式 */
+:deep(.clickable-row) {
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  
+  &:hover {
+    background-color: var(--el-table-row-hover-bg-color);
+  }
+}
+
+/* 图片预览相关样式 */
+:deep(.el-image-viewer__wrapper) {
+  .el-image-viewer__img {
+    max-width: 90%;
+    max-height: 90vh;
+    object-fit: contain;
+  }
+  
+  .el-image-viewer__actions {
+    opacity: 1;
+    background-color: rgba(0, 0, 0, 0.7);
+  }
+  
+  .el-image-viewer__close {
+    color: #fff;
+  }
+  
+  .el-image-viewer__mask {
+    opacity: 0.9;
+  }
+}
+
+.image-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+  padding: 20px;
+  
+  .el-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
 }
 </style> 

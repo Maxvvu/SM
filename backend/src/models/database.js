@@ -8,11 +8,13 @@ let db;
 
 function getDatabase() {
   if (!db) {
+    logger.info('正在连接数据库:', dbPath);
     db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
         logger.error('数据库连接失败:', err);
         throw err;
       }
+      logger.info('数据库连接成功');
     });
     db.run('PRAGMA foreign_keys = ON');
   }
@@ -23,16 +25,32 @@ async function initDatabase() {
   const db = getDatabase();
   
   try {
+    logger.info('开始初始化数据库...');
+
     // 创建users表
     await run(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
-        role TEXT NOT NULL
+        role TEXT NOT NULL,
+        status INTEGER DEFAULT 1,
+        last_login TIMESTAMP
       )
     `);
     logger.info('users表创建成功');
+
+    // 检查是否需要插入管理员账户
+    const [adminUser] = await get('SELECT * FROM users WHERE username = ?', ['admin']);
+    if (!adminUser) {
+      logger.info('创建管理员账户...');
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      await run(
+        'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
+        ['admin', hashedPassword, 'admin']
+      );
+      logger.info('管理员账户创建成功');
+    }
 
     // 创建students表
     await run(`
@@ -77,32 +95,11 @@ async function initDatabase() {
     `);
     logger.info('behaviors表创建成功');
 
-    // 检查是否需要插入测试数据
-    const [userCount] = await get('SELECT COUNT(*) as count FROM users');
-    if (userCount.count === 0) {
-      logger.info('插入测试用户数据...');
-      const hashedPassword = await bcrypt.hash('admin123', 10);
-      await run(
-        'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
-        ['admin', hashedPassword, 'admin']
-      );
-
-      // 插入测试学生数据
-      const testStudents = [
-        ['张三', 'S001', '高一', '1班', null, '北京市海淀区', '张父', '13800138000', '品学兼优'],
-        ['李四', 'S002', '高二', '2班', null, '北京市朝阳区', '李母', '13900139000', '积极向上'],
-        ['王五', 'S003', '高三', '3班', null, '北京市西城区', '王父', '13700137000', '认真负责']
-      ];
-
-      for (const student of testStudents) {
-        await run(`
-          INSERT INTO students (name, student_id, grade, class, photo_url, address, emergency_contact, emergency_phone, notes)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, student);
-      }
-
-      // 插入测试行为类型数据
-      const testTypes = [
+    // 检查是否需要插入基本行为类型
+    const [typeCount] = await get('SELECT COUNT(*) as count FROM behavior_types');
+    if (typeCount.count === 0) {
+      logger.info('插入基本行为类型...');
+      const basicTypes = [
         ['迟到', '违纪', '上课迟到'],
         ['早退', '违纪', '未经许可提前离开'],
         ['打架', '违纪', '与他人发生肢体冲突'],
@@ -111,15 +108,16 @@ async function initDatabase() {
         ['获奖', '优秀', '在比赛或竞赛中获奖']
       ];
 
-      for (const type of testTypes) {
-        await run(`
-          INSERT INTO behavior_types (name, category, description)
-          VALUES (?, ?, ?)
-        `, type);
+      for (const [name, category, description] of basicTypes) {
+        await run(
+          'INSERT INTO behavior_types (name, category, description) VALUES (?, ?, ?)',
+          [name, category, description]
+        );
       }
-
-      logger.info('测试数据插入完成');
+      logger.info('基本行为类型插入完成');
     }
+
+    logger.info('数据库初始化完成');
   } catch (err) {
     logger.error('数据库初始化失败:', err);
     throw err;
@@ -130,8 +128,12 @@ async function initDatabase() {
 function run(sql, params = []) {
   return new Promise((resolve, reject) => {
     getDatabase().run(sql, params, function(err) {
-      if (err) reject(err);
-      else resolve(this);
+      if (err) {
+        logger.error('SQL执行失败:', { sql, params, error: err });
+        reject(err);
+      } else {
+        resolve(this);
+      }
     });
   });
 }
@@ -140,8 +142,12 @@ function run(sql, params = []) {
 function get(sql, params = []) {
   return new Promise((resolve, reject) => {
     getDatabase().all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
+      if (err) {
+        logger.error('SQL查询失败:', { sql, params, error: err });
+        reject(err);
+      } else {
+        resolve(rows);
+      }
     });
   });
 }

@@ -23,30 +23,6 @@
       </div>
     </div>
 
-    <el-row :gutter="20">
-      <el-col :span="12">
-        <el-card class="chart-card">
-          <template #header>
-            <div class="card-header">
-              <span>行为类型分布</span>
-            </div>
-          </template>
-          <div ref="behaviorTypeChartRef" style="height: 300px"></div>
-        </el-card>
-      </el-col>
-      
-      <el-col :span="12">
-        <el-card class="chart-card">
-          <template #header>
-            <div class="card-header">
-              <span>年级行为对比</span>
-            </div>
-          </template>
-          <div ref="gradeComparisonChartRef" style="height: 300px"></div>
-        </el-card>
-      </el-col>
-    </el-row>
-
     <el-card class="detail-card">
       <template #header>
         <div class="card-header">
@@ -89,21 +65,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
 import axios from 'axios'
 import * as XLSX from 'xlsx'
 
 const dateRange = ref([])
 const selectedGrade = ref('')
 const loading = ref(false)
-const behaviorTypeChartRef = ref(null)
-const gradeComparisonChartRef = ref(null)
-
-let behaviorTypeChart = null
-let gradeComparisonChart = null
 
 // 添加详细信息相关的响应式变量
 const allData = ref([])
@@ -118,285 +88,67 @@ const detailData = computed(() => {
 })
 
 onMounted(() => {
-  console.log('组件挂载，初始化图表')
-  initCharts()
   console.log('开始获取数据')
   fetchData()
 })
 
-const initCharts = () => {
-  // 初始化行为类型分布图表
-  behaviorTypeChart = echarts.init(behaviorTypeChartRef.value)
-  behaviorTypeChart.setOption({
-    title: {
-      text: '行为类型分布'
-    },
-    tooltip: {
-      trigger: 'item',
-      formatter: '{b}: {c} ({d}%)'
-    },
-    legend: {
-      orient: 'vertical',
-      right: 10,
-      top: 'center'
-    },
-    series: [
-      {
-        type: 'pie',
-        radius: ['40%', '70%'],
-        avoidLabelOverlap: false,
-        itemStyle: {
-          borderRadius: 10,
-          borderColor: '#fff',
-          borderWidth: 2
-        },
-        label: {
-          show: false,
-          position: 'center'
-        },
-        emphasis: {
-          label: {
-            show: true,
-            fontSize: '20',
-            fontWeight: 'bold'
-          }
-        },
-        labelLine: {
-          show: false
-        },
-        data: []
-      }
-    ]
-  })
-
-  // 初始化年级行为对比图表
-  gradeComparisonChart = echarts.init(gradeComparisonChartRef.value)
-  gradeComparisonChart.setOption({
-    title: {
-      text: '年级行为对比'
-    },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: {
-        type: 'shadow'
-      }
-    },
-    legend: {
-      data: ['违纪', '优秀']
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: ['高一', '高二', '高三']
-    },
-    yAxis: {
-      type: 'value'
-    },
-    series: [
-      {
-        name: '违纪',
-        type: 'bar',
-        stack: 'total',
-        label: {
-          show: true
-        },
-        emphasis: {
-          focus: 'series'
-        },
-        data: []
-      },
-      {
-        name: '优秀',
-        type: 'bar',
-        stack: 'total',
-        label: {
-          show: true
-        },
-        emphasis: {
-          focus: 'series'
-        },
-        data: []
-      }
-    ]
-  })
-
-  // 监听窗口大小变化
-  window.addEventListener('resize', () => {
-    behaviorTypeChart.resize()
-    gradeComparisonChart.resize()
-  })
-}
-
 const fetchData = async () => {
-  loading.value = true
   try {
-    const params = {
+    loading.value = true
+    console.log('获取统计数据，参数:', {
       grade: selectedGrade.value,
-      start_date: dateRange.value?.[0],
-      end_date: dateRange.value?.[1]
-    }
-
-    console.log('获取统计数据，参数:', params)
-    // 获取统计数据
-    const statsResponse = await axios.get('/api/statistics', { params })
-    console.log('统计数据响应:', statsResponse.data)
-    const statsData = statsResponse.data
-
-    // 更新图表数据
-    updateCharts(statsData)
+      start_date: dateRange.value?.[0]?.toISOString(),
+      end_date: dateRange.value?.[1]?.toISOString()
+    })
 
     // 获取违纪详细数据
-    const detailParams = {
+    console.log('获取违纪详细数据，参数:', {
       grade: selectedGrade.value,
       category: '违纪',
-      start_date: dateRange.value?.[0]?.toISOString().split('T')[0],
-      end_date: dateRange.value?.[1]?.toISOString().split('T')[0]
-    }
+      start_date: dateRange.value?.[0]?.toISOString(),
+      end_date: dateRange.value?.[1]?.toISOString()
+    })
 
-    console.log('获取违纪详细数据，参数:', detailParams)
-    const detailResponse = await axios.get('/api/behaviors', { params: detailParams })
+    const detailResponse = await axios.get('/api/behaviors', {
+      params: {
+        grade: selectedGrade.value,
+        category: '违纪',
+        start_date: dateRange.value?.[0]?.toISOString(),
+        end_date: dateRange.value?.[1]?.toISOString()
+      }
+    })
+
     console.log('违纪详细数据响应:', detailResponse.data)
-
-    if (Array.isArray(detailResponse.data)) {
-      allData.value = detailResponse.data
-      total.value = detailResponse.data.length
-      console.log('更新后的详细数据总数:', total.value)
-    } else {
-      console.warn('未获取到有效的违纪详细数据')
-      allData.value = []
-      total.value = 0
-    }
+    allData.value = detailResponse.data
+    total.value = detailResponse.data.length
+    console.log('更新后的详细数据总数:', total.value)
 
   } catch (error) {
-    console.error('获取数据失败:', error.response || error)
-    ElMessage.error(error.response?.data?.message || '获取数据失败')
-    allData.value = []
-    total.value = 0
+    console.error('获取数据失败:', error)
+    ElMessage.error('获取数据失败')
   } finally {
     loading.value = false
-  }
-}
-
-const updateCharts = (data) => {
-  // 更新行为类型分布图表
-  if (data.behavior_type_distribution) {
-    behaviorTypeChart.setOption({
-      series: [{
-        data: data.behavior_type_distribution
-      }]
-    })
-  }
-
-  // 更新年级行为对比图表
-  if (data.grade_violations && data.grade_excellent) {
-    gradeComparisonChart.setOption({
-      series: [
-        {
-          data: data.grade_violations
-        },
-        {
-          data: data.grade_excellent
-        }
-      ]
-    })
   }
 }
 
 const handleDateChange = () => {
-  currentPage.value = 1 // 重置页码
   fetchData()
 }
 
 const handleFilter = () => {
-  currentPage.value = 1 // 重置页码
   fetchData()
 }
 
-const exportReport = async () => {
-  try {
-    loading.value = true
-    
-    // 准备导出参数
-    const params = {
-      grade: selectedGrade.value,
-      start_date: dateRange.value?.[0]?.toISOString().split('T')[0],
-      end_date: dateRange.value?.[1]?.toISOString().split('T')[0]
-    }
-    
-    // 获取所有行为记录
-    const response = await axios.get('/api/behaviors', { params })
-    const data = response.data
-    
-    if (!data || !data.length) {
-      ElMessage.warning('没有数据可供导出')
-      return
-    }
-    
-    // 准备Excel数据
-    const excelData = data.map(item => ({
-      '学生姓名': item.student_name,
-      '年级': item.grade,
-      '班级': item.class,
-      '行为类型': item.behavior_type,
-      '行为类别': item.category,
-      '描述': item.description,
-      '时间': formatDate(item.date)
-    }))
-    
-    // 创建工作簿和工作表
-    const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.json_to_sheet(excelData)
-    
-    // 设置列宽
-    const colWidths = [
-      { wch: 10 }, // 学生姓名
-      { wch: 8 },  // 年级
-      { wch: 8 },  // 班级
-      { wch: 15 }, // 行为类型
-      { wch: 8 },  // 行为类别
-      { wch: 40 }, // 描述
-      { wch: 20 }  // 时间
-    ]
-    ws['!cols'] = colWidths
-    
-    // 添加工作表到工作簿
-    XLSX.utils.book_append_sheet(wb, ws, '行为记录报表')
-    
-    // 生成文件名
-    const dateStr = new Date().toISOString().split('T')[0]
-    const fileName = `行为记录报表_${dateStr}.xlsx`
-    
-    // 导出文件
-    XLSX.writeFile(wb, fileName)
-    
-    ElMessage.success('报表导出成功')
-  } catch (error) {
-    console.error('导出报表失败:', error)
-    ElMessage.error('导出报表失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-// 分页处理方法
 const handleSizeChange = (val) => {
   pageSize.value = val
-  // 不需要重新请求数据，因为是前端分页
+  currentPage.value = 1
 }
 
 const handleCurrentChange = (val) => {
   currentPage.value = val
-  // 不需要重新请求数据，因为是前端分页
 }
 
-// 日期格式化方法
 const formatDate = (date) => {
-  if (!date) return ''
   return new Date(date).toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
@@ -406,11 +158,27 @@ const formatDate = (date) => {
   })
 }
 
-// 监听筛选条件变化
-watch([dateRange, selectedGrade], () => {
-  currentPage.value = 1 // 重置页码
-  fetchData()
-}, { deep: true })
+const exportReport = () => {
+  // 准备导出数据
+  const exportData = allData.value.map(item => ({
+    '学生姓名': item.student_name,
+    '违纪类型': item.behavior_type,
+    '违纪时间': formatDate(item.date),
+    '年级': item.grade,
+    '班级': item.class,
+    '描述': item.description
+  }))
+
+  // 创建工作簿
+  const wb = XLSX.utils.book_new()
+  const ws = XLSX.utils.json_to_sheet(exportData)
+
+  // 添加工作表到工作簿
+  XLSX.utils.book_append_sheet(wb, ws, '违纪记录')
+
+  // 导出文件
+  XLSX.writeFile(wb, '违纪记录报表.xlsx')
+}
 </script>
 
 <style scoped>
@@ -430,8 +198,8 @@ watch([dateRange, selectedGrade], () => {
   align-items: center;
 }
 
-.chart-card {
-  margin-bottom: 20px;
+.detail-card {
+  margin-top: 20px;
 }
 
 .card-header {
@@ -440,17 +208,9 @@ watch([dateRange, selectedGrade], () => {
   align-items: center;
 }
 
-.detail-card {
-  margin-top: 20px;
-}
-
 .pagination {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
-}
-
-.el-table {
-  margin-top: 10px;
 }
 </style> 

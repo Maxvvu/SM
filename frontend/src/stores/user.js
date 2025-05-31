@@ -16,12 +16,14 @@ const safeJSONParse = (str, defaultValue = null) => {
 export const useUserStore = defineStore('user', {
   state: () => ({
     token: localStorage.getItem('token') || '',
-    userInfo: safeJSONParse(localStorage.getItem('userInfo'))
+    userInfo: safeJSONParse(localStorage.getItem('userInfo')),
+    userRole: localStorage.getItem('userRole') || ''
   }),
   
   getters: {
     isLoggedIn: (state) => !!state.token,
-    username: (state) => state.userInfo?.username
+    username: (state) => state.userInfo?.username,
+    isAdmin: (state) => state.userRole === 'admin'
   },
 
   actions: {
@@ -43,9 +45,11 @@ export const useUserStore = defineStore('user', {
         
         this.token = token
         this.userInfo = userInfo
-        
+        this.userRole = userInfo.role
+
         localStorage.setItem('token', token)
         localStorage.setItem('userInfo', JSON.stringify(userInfo))
+        localStorage.setItem('userRole', userInfo.role)
         
         return true
       } catch (error) {
@@ -53,8 +57,10 @@ export const useUserStore = defineStore('user', {
         
         this.token = ''
         this.userInfo = null
+        this.userRole = ''
         localStorage.removeItem('token')
         localStorage.removeItem('userInfo')
+        localStorage.removeItem('userRole')
         
         // 重新抛出错误，让组件处理具体的错误信息显示
         throw error
@@ -66,7 +72,9 @@ export const useUserStore = defineStore('user', {
         const { valid, userInfo } = await api.get('/api/verify-token')
         if (valid) {
           this.userInfo = userInfo
+          this.userRole = userInfo.role
           localStorage.setItem('userInfo', JSON.stringify(userInfo))
+          localStorage.setItem('userRole', userInfo.role)
           return true
         }
         this.logout()
@@ -81,8 +89,10 @@ export const useUserStore = defineStore('user', {
     logout() {
       this.token = ''
       this.userInfo = null
+      this.userRole = ''
       localStorage.removeItem('token')
       localStorage.removeItem('userInfo')
+      localStorage.removeItem('userRole')
       router.push('/login')
     }
   }

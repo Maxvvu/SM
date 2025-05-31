@@ -31,6 +31,44 @@ const upload = multer({
   }
 });
 
+// 获取行为统计
+router.get('/stats', authenticateToken, async (req, res, next) => {
+  try {
+    const { start_date, end_date, type } = req.query;
+    
+    let query = `
+      SELECT COUNT(*) as count
+      FROM behaviors b
+      JOIN behavior_types bt ON b.behavior_type = bt.name
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (type === 'violation') {
+      query += ' AND bt.category = ?';
+      params.push('违纪');
+    } else if (type === 'excellent') {
+      query += ' AND bt.category = ?';
+      params.push('优秀');
+    }
+
+    if (start_date) {
+      query += ' AND b.date >= ?';
+      params.push(start_date);
+    }
+
+    if (end_date) {
+      query += ' AND b.date <= ?';
+      params.push(end_date);
+    }
+
+    const [result] = await get(query, params);
+    res.json({ count: result.count });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 获取所有行为记录
 router.get('/', authenticateToken, async (req, res, next) => {
   try {

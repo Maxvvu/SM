@@ -4,6 +4,7 @@ const path = require('path');
 const { run, get } = require('../models/database');
 const { logger } = require('../utils/logger');
 const { authenticateToken } = require('../middleware/auth');
+const { createStudentTemplate } = require('../utils/excel');
 
 const router = express.Router();
 
@@ -28,6 +29,22 @@ const upload = multer({
       return cb(null, true);
     }
     cb(new Error('只允许上传jpg/jpeg/png格式的图片！'));
+  }
+});
+
+// 下载Excel导入模板
+router.get('/template', authenticateToken, async (req, res, next) => {
+  try {
+    const workbook = await createStudentTemplate();
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=student_import_template.xlsx');
+    
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    logger.error('生成Excel模板失败:', err);
+    next(err);
   }
 });
 

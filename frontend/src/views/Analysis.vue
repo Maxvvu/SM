@@ -177,23 +177,41 @@ const initCharts = () => {
   typeChart.setOption({
     tooltip: {
       trigger: 'item',
-      formatter: '{b}: {c} ({d}%)'
+      formatter: '{b}: {c}次 ({d}%)'
     },
     legend: {
       orient: 'vertical',
-      left: 'left'
+      left: 'left',
+      top: 'middle'
     },
     series: [{
+      name: '行为类型分布',
       type: 'pie',
-      radius: '50%',
-      data: [],
+      radius: ['40%', '70%'],
+      avoidLabelOverlap: false,
+      itemStyle: {
+        borderRadius: 10,
+        borderColor: '#fff',
+        borderWidth: 2
+      },
+      label: {
+        show: true,
+        position: 'outside',
+        formatter: '{b}: {c}次'
+      },
       emphasis: {
+        label: {
+          show: true,
+          fontSize: '16',
+          fontWeight: 'bold'
+        },
         itemStyle: {
           shadowBlur: 10,
           shadowOffsetX: 0,
           shadowColor: 'rgba(0, 0, 0, 0.5)'
         }
-      }
+      },
+      data: []
     }]
   })
 
@@ -275,39 +293,55 @@ const fetchData = async () => {
 
     // 更新统计数字
     statistics.value = {
-      totalViolations: data.total_violations,
-      totalExcellent: data.total_excellent,
-      violationStudents: data.violation_students,
-      excellentStudents: data.excellent_students
+      totalViolations: data.overview?.behavior_stats?.find(s => s.category === '违纪')?.total_count || 0,
+      totalExcellent: data.overview?.behavior_stats?.find(s => s.category === '优秀')?.total_count || 0,
+      violationStudents: data.overview?.behavior_stats?.find(s => s.category === '违纪')?.student_count || 0,
+      excellentStudents: data.overview?.behavior_stats?.find(s => s.category === '优秀')?.student_count || 0
     }
 
     // 更新行为类型分布图
     charts[0].setOption({
       series: [{
-        data: data.behavior_type_distribution
+        data: data.type_distribution || []
       }]
     })
 
     // 更新年级行为趋势图
+    const gradeData = data.class_ranking || []
+    const gradeViolations = ['高一', '高二', '高三'].map(grade => 
+      gradeData.find(item => item.grade === grade)?.count || 0
+    )
+    const gradeExcellent = ['高一', '高二', '高三'].map(grade => 
+      gradeData.find(item => item.grade === grade)?.student_count || 0
+    )
+
     charts[1].setOption({
       series: [
         {
-          data: data.grade_violations
+          data: gradeViolations
         },
         {
-          data: data.grade_excellent
+          data: gradeExcellent
         }
       ]
     })
 
     // 更新行为记录趋势图
+    const trendData = data.trend || []
+    const violationTrend = trendData
+      .filter(item => item.category === '违纪')
+      .map(item => [item.date, item.count])
+    const excellentTrend = trendData
+      .filter(item => item.category === '优秀')
+      .map(item => [item.date, item.count])
+
     charts[2].setOption({
       series: [
         {
-          data: data.time_trend.violations
+          data: violationTrend
         },
         {
-          data: data.time_trend.excellent
+          data: excellentTrend
         }
       ]
     })
