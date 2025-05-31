@@ -167,8 +167,7 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res, nex
 // 更新行为记录
 router.put('/:id', authenticateToken, upload.single('image'), async (req, res, next) => {
   try {
-    const { student_id, behavior_type, description } = req.body;
-    const image_url = req.file ? `/uploads/behaviors/${req.file.filename}` : undefined;
+    const { student_id, behavior_type, description,image_url } = req.body;
 
     let updateFields = [];
     let params = [];
@@ -176,7 +175,8 @@ router.put('/:id', authenticateToken, upload.single('image'), async (req, res, n
     const fields = {
       student_id,
       behavior_type,
-      description
+      description,
+      image_url
     };
 
     for (const [key, value] of Object.entries(fields)) {
@@ -186,10 +186,7 @@ router.put('/:id', authenticateToken, upload.single('image'), async (req, res, n
       }
     }
 
-    if (image_url) {
-      updateFields.push('image_url = ?');
-      params.push(image_url);
-    }
+ 
 
     params.push(req.params.id);
 

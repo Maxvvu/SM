@@ -134,7 +134,6 @@
         v-loading="loading"
         :header-cell-style="{ background: 'var(--el-color-primary-light-9)', color: 'var(--el-text-color-primary)' }"
         :row-class-name="rowClassName"
-        @row-click="handleRowClick"
         ref="tableRef"
       >
         <el-table-column prop="student_name" label="学生姓名" sortable />
@@ -191,16 +190,22 @@
             <el-button
               size="small"
               type="primary"
-              @click.stop="handleEdit(scope.row)"
+              @click="handleEdit(scope.row)"
             >修改</el-button>
             <el-button
               size="small"
               type="danger"
-              @click.stop="handleDelete(scope.row)"
+              @click="handleDelete(scope.row)"
             >删除</el-button>
+            <el-button
+              size="small"
+              type="primary"
+              @click="handleDetail(scope.row)"
+            >x详情</el-button>
           </template>
         </el-table-column>
       </el-table>
+  
 
       <div class="pagination-container">
         <el-pagination
@@ -935,7 +940,7 @@ const detailDialogVisible = ref(false)
 const selectedBehavior = ref(null)
 
 // 添加行点击事件处理函数
-const handleRowClick = (row) => {
+const handleDetail = (row) => {
   selectedBehavior.value = row
   detailDialogVisible.value = true
 }

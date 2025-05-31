@@ -130,7 +130,7 @@
           :sort-orders="['ascending', 'descending']"
         >
           <template #default="scope">
-            <el-tag :type="scope.row.violation_count > 0 ? 'danger' : ''">
+            <el-tag :type="scope.row.violation_count > 0 ? 'danger' : 'info'">
               {{ scope.row.violation_count || 0 }}
             </el-tag>
           </template>
@@ -143,7 +143,7 @@
           :sort-orders="['ascending', 'descending']"
         >
           <template #default="scope">
-            <el-tag :type="scope.row.excellent_count > 0 ? 'success' : ''">
+            <el-tag :type="scope.row.excellent_count > 0 ? 'success' : 'info'">
               {{ scope.row.excellent_count || 0 }}
             </el-tag>
           </template>
@@ -697,6 +697,13 @@ const handleSubmit = async () => {
 
 // 添加选中学生数组
 const selectedStudents = ref([])
+
+// 添加uploadHeaders定义
+const uploadHeaders = computed(() => {
+  return {
+    'Authorization': `Bearer ${localStorage.getItem('token')}` // 从localStorage获取token
+  }
+})
 
 // 处理选择变化
 const handleSelectionChange = (selection) => {
