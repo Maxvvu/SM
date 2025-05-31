@@ -185,23 +185,25 @@
             {{ new Date(scope.row.date).toLocaleString() }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right" align="left">
           <template #default="scope">
-            <el-button
-              size="small"
-              type="primary"
-              @click="handleEdit(scope.row)"
-            >修改</el-button>
-            <el-button
-              size="small"
-              type="danger"
-              @click="handleDelete(scope.row)"
-            >删除</el-button>
-            <el-button
-              size="small"
-              type="primary"
-              @click="handleDetail(scope.row)"
-            >x详情</el-button>
+            <div class="button-group">
+              <el-button
+                size="small"
+                type="primary"
+                @click="handleEdit(scope.row)"
+              >修改</el-button>
+              <el-button
+                size="small"
+                type="danger"
+                @click="handleDelete(scope.row)"
+              >删除</el-button>
+              <el-button
+                size="small"
+                type="info"
+                @click="handleDetail(scope.row)"
+              >详情</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -972,20 +974,35 @@ onMounted(() => {
 
 <style scoped>
 .behaviors-container {
+  padding: 24px;
+  background-color: #f5f7fa;
+  min-height: 100vh;
+}
+
+.page-header {
+  background: white;
+  border-radius: 8px;
   padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.header-right {
+.title-section {
   display: flex;
   align-items: center;
   gap: 16px;
+  margin-bottom: 20px;
+}
+
+.title-section h2 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--el-text-color-primary);
+}
+
+.total-count {
+  font-size: 14px;
+  padding: 4px 12px;
 }
 
 .header-content {
@@ -998,12 +1015,22 @@ onMounted(() => {
   display: flex;
   gap: 16px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .search-box {
   flex: 1;
   min-width: 250px;
   max-width: 300px;
+}
+
+.search-input :deep(.el-input__wrapper) {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.search-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .date-picker {
@@ -1016,43 +1043,81 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .filter-group {
   display: flex;
   gap: 12px;
   flex: 1;
+  flex-wrap: wrap;
 }
 
 .filter-select {
   min-width: 140px;
   flex: 1;
+  max-width: 200px;
   transition: all 0.3s ease;
+}
+
+.filter-select :deep(.el-input__wrapper) {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.filter-select :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.custom-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.option-icon {
+  font-size: 16px;
 }
 
 .action-group {
   display: flex;
   gap: 12px;
-  margin-left: 16px;
+  margin-left: auto;
 }
 
 .add-button {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 16px;
-  transition: all 0.3s;
+  gap: 8px;
+  padding: 12px 20px;
+  font-weight: 500;
+  transition: all 0.3s ease;
 }
 
-.add-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+.table-container {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
 }
 
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+:deep(.el-table) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+:deep(.el-table th) {
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-weight: 600;
+  padding: 12px 0;
+}
+
+:deep(.el-table td) {
+  padding: 16px 0;
+}
+
+:deep(.el-table--enable-row-hover .el-table__body tr:hover > td) {
+  background-color: var(--el-color-primary-light-9);
 }
 
 .image-container {
@@ -1060,211 +1125,66 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   width: 100%;
-  height: 50px;
-  position: relative;
+  height: 60px;
 }
 
 .image-preview {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 50px;
-  height: 50px;
-  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.image-preview:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .behavior-image-thumb {
-  width: 50px !important;
-  height: 50px !important;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.3s;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border: 1px solid #ebeef5;
-  display: block;
 }
 
-.behavior-image-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-}
-
-.image-loading, .image-error {
+.image-error, .image-loading {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background-color: #f5f7fa;
-  color: #909399;
+  gap: 4px;
+  background-color: var(--el-fill-color-lighter);
+  color: var(--el-text-color-secondary);
   font-size: 12px;
-  position: absolute;
-  top: 0;
-  left: 0;
-  border-radius: 4px;
-}
-
-.image-loading .el-icon, .image-error .el-icon {
-  font-size: 20px;
-  margin-bottom: 4px;
 }
 
 .no-image {
-  color: #909399;
-  font-size: 12px;
-}
-
-:deep(.el-image-viewer__wrapper) {
-  z-index: 2100;
-}
-
-:deep(.el-image-viewer__mask) {
-  opacity: 0.9;
-}
-
-:deep(.el-image-viewer__close) {
-  color: #fff;
-}
-
-:deep(.el-image-viewer__actions) {
-  opacity: 1;
-  background-color: rgba(0, 0, 0, 0.7);
-}
-
-:deep(.el-image-viewer__canvas) {
-  user-select: none;
-}
-
-:deep(.el-image-viewer__img) {
-  background-color: transparent;
-}
-
-.behavior-image {
-  width: 100px;
-  height: 100px;
-  display: block;
-  object-fit: cover;
-  border-radius: 4px;
-  border: 1px solid #ebeef5;
-}
-
-.behavior-image-uploader {
-  border: 1px dashed var(--el-border-color);
-  border-radius: 6px;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  transition: var(--el-transition-duration-fast);
-}
-
-.behavior-image-uploader:hover {
-  border-color: var(--el-color-primary);
-}
-
-.behavior-image-uploader-icon {
-  font-size: 28px;
-  color: #8c939d;
-  width: 100px;
-  height: 100px;
-  text-align: center;
-  line-height: 100px;
-}
-
-.el-upload__tip {
-  font-size: 12px;
-  color: #606266;
-  margin-top: 5px;
-}
-
-:deep(.el-input__wrapper) {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-:deep(.el-input__wrapper:hover) {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-:deep(.el-input__prefix) {
   color: var(--el-text-color-secondary);
-  margin-right: 4px;
-}
-
-:deep(.el-range-editor.el-input__wrapper) {
-  padding: 0 10px;
-}
-
-:deep(.el-range-separator) {
-  color: var(--el-text-color-placeholder);
-}
-
-@media screen and (max-width: 768px) {
-  .search-section,
-  .filter-section {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .search-box {
-    max-width: none;
-  }
-  
-  .date-picker {
-    width: 100%;
-  }
-  
-  .filter-group {
-    flex-direction: column;
-  }
-  
-  .filter-select {
-    width: 100%;
-  }
-  
-  .action-group {
-    margin-left: 0;
-    justify-content: flex-end;
-  }
+  font-size: 12px;
 }
 
 .pagination-container {
-  display: flex;
-  justify-content: flex-end;
   margin-top: 20px;
   padding: 10px 0;
+  display: flex;
+  justify-content: flex-end;
 }
 
 :deep(.el-pagination) {
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 0;
 }
 
 :deep(.el-pagination .el-select .el-input) {
   width: 120px;
 }
 
-:deep(.el-pagination .el-pagination__total) {
-  margin-right: 16px;
-}
-
-:deep(.el-pagination .el-pagination__sizes) {
-  margin-right: 16px;
-}
-
-:deep(.el-pagination button) {
-  background-color: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-  border: none;
-  transition: all 0.3s ease;
-}
-
-:deep(.el-pagination button:hover) {
-  background-color: var(--el-color-primary-light-7);
-  color: var(--el-color-primary);
-}
-
+:deep(.el-pagination button),
 :deep(.el-pagination .el-pager li) {
   background-color: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
@@ -1272,6 +1192,7 @@ onMounted(() => {
   transition: all 0.3s ease;
 }
 
+:deep(.el-pagination button:hover),
 :deep(.el-pagination .el-pager li:hover) {
   background-color: var(--el-color-primary-light-7);
 }
@@ -1281,27 +1202,14 @@ onMounted(() => {
   color: white;
 }
 
-@media screen and (max-width: 768px) {
-  .pagination-container {
-    justify-content: center;
-  }
-  
-  :deep(.el-pagination) {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
-  }
-}
-
-/* 添加详情对话框相关样式 */
 .behavior-detail-dialog {
   :deep(.el-dialog__body) {
-    padding: 20px;
+    padding: 0;
   }
 }
 
 .detail-content {
-  padding: 10px;
+  padding: 20px;
 }
 
 .detail-header {
@@ -1313,7 +1221,7 @@ onMounted(() => {
 
 .student-info {
   h3 {
-    margin: 0 0 10px 0;
+    margin: 0 0 8px 0;
     font-size: 20px;
     color: var(--el-text-color-primary);
   }
@@ -1333,17 +1241,12 @@ onMounted(() => {
 
 .detail-body {
   .detail-item {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
     
     label {
-      display: block;
       color: var(--el-text-color-secondary);
       margin-bottom: 8px;
-      font-weight: 500;
-    }
-    
-    span {
-      color: var(--el-text-color-primary);
+      display: block;
     }
     
     &.description {
@@ -1351,69 +1254,120 @@ onMounted(() => {
         margin: 0;
         line-height: 1.6;
         color: var(--el-text-color-primary);
-        white-space: pre-wrap;
       }
     }
     
     &.image {
       .image-preview {
-        margin-top: 10px;
+        width: 100%;
+        height: auto;
+        max-height: 400px;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-top: 8px;
         
         .detail-image {
-          max-width: 100%;
-          max-height: 300px;
-          border-radius: 4px;
-          box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
         }
       }
     }
   }
 }
 
-/* 添加可点击行的样式 */
-:deep(.clickable-row) {
+.behavior-image-uploader {
+  border: 2px dashed var(--el-border-color);
+  border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
   
   &:hover {
-    background-color: var(--el-table-row-hover-bg-color);
+    border-color: var(--el-color-primary);
+  }
+  
+  .behavior-image {
+    width: 178px;
+    height: 178px;
+    display: block;
+    object-fit: cover;
+  }
+  
+  .behavior-image-uploader-icon {
+    font-size: 28px;
+    color: var(--el-text-color-secondary);
+    width: 178px;
+    height: 178px;
+    text-align: center;
+    line-height: 178px;
   }
 }
 
-/* 图片预览相关样式 */
-:deep(.el-image-viewer__wrapper) {
-  .el-image-viewer__img {
-    max-width: 90%;
-    max-height: 90vh;
-    object-fit: contain;
-  }
-  
-  .el-image-viewer__actions {
-    opacity: 1;
-    background-color: rgba(0, 0, 0, 0.7);
-  }
-  
-  .el-image-viewer__close {
-    color: #fff;
-  }
-  
-  .el-image-viewer__mask {
-    opacity: 0.9;
-  }
-}
-
-.image-error {
+.button-group {
   display: flex;
-  flex-direction: column;
+  gap: 8px;
+  justify-content: flex-start;
   align-items: center;
-  justify-content: center;
-  color: var(--el-text-color-secondary);
-  font-size: 14px;
-  padding: 20px;
+  padding-left: 0;
+}
+
+:deep(.el-table .cell) {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.button-group :deep(.el-button--small) {
+  padding: 6px 12px;
+  min-width: 60px;
+  margin-left: 0;
+}
+
+@media screen and (max-width: 768px) {
+  .behaviors-container {
+    padding: 16px;
+  }
   
-  .el-icon {
-    font-size: 24px;
-    margin-bottom: 8px;
+  .page-header {
+    padding: 16px;
+  }
+  
+  .search-section,
+  .filter-section {
+    flex-direction: column;
+  }
+  
+  .search-box,
+  .date-picker,
+  .filter-select {
+    width: 100%;
+    max-width: none;
+  }
+  
+  .action-group {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .pagination-container {
+    justify-content: center;
+  }
+  
+  :deep(.el-pagination) {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  .button-group {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  
+  .button-group :deep(.el-button--small) {
+    padding: 6px 8px;
+    min-width: auto;
   }
 }
 </style> 
