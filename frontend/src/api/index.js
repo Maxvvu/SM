@@ -4,7 +4,6 @@ import router from '../router'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://localhost:3000',  // 使用完整的后端地址
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

@@ -176,9 +176,8 @@
         <el-form-item label="图片">
           <el-upload
             class="behavior-image-uploader"
-            action="/api/upload"
+            action="/api/upload?type=behaviors"
             name="file"
-            :data="{ type: 'behavior' }"
             :show-file-list="false"
             :before-upload="beforeImageUpload"
             :headers="uploadHeaders"
@@ -359,13 +358,19 @@ const beforeImageUpload = (file) => {
 }
 
 const handleImageSuccess = (response) => {
-  console.log('上传成功，响应数据:', response)
+  console.log('图片上传成功，完整响应数据:', response)
+  
   if (response.url) {
+    console.log('设置image_url前的form数据:', { ...form.value })
     // 保存服务器返回的原始路径
     form.value.image_url = response.url
+    console.log('设置image_url后的form数据:', { ...form.value })
+    console.log('设置的image_url值:', response.url)
     ElMessage.success('图片上传成功')
   } else {
     console.error('无效的响应格式:', response)
+    console.error('响应数据类型:', typeof response)
+    console.error('响应数据结构:', Object.keys(response))
     ElMessage.error('图片上传失败：服务器返回的数据格式不正确')
   }
 }
@@ -418,74 +423,77 @@ const handleSubmit = async () => {
   if (!formRef.value || submitting.value) return
 
   try {
+    // 在验证前先检查并记录表单数据
+    console.log('提交前的表单数据:', { ...form.value })
+    
     await formRef.value.validate()
     
     submitting.value = true
+    
+    // 保存image_url的临时变量
+    const imageUrl = form.value.image_url
+    console.log('保存的image_url:', imageUrl)
     
     const requestData = {
       student_id: parseInt(form.value.student_id),
       behavior_type: form.value.behavior_type,
       description: form.value.description.trim(),
       date: form.value.date,
-      image_url: form.value.image_url
+      image_url: imageUrl || ''  // 使用临时变量
     }
+
+    console.log('准备提交的数据:', requestData)
 
     let response
     try {
       if (form.value.id) {
-        // 修改现有记录
-        console.log('正在更新记录，row.id:', form.value.id, '数据:', requestData)
-        response = await axios.put(`/api/behaviors/update/${form.value.id}`, requestData)
-        console.log('更新响应:', response)
-        ElMessage.success('更新成功')
+        console.log('执行更新操作，ID:', form.value.id)
+        response = await axios.put(`/api/behaviors/${form.value.id}`, requestData)
+        console.log('更新响应:', response.data)
       } else {
-        // 添加新记录
-        console.log('正在添加新记录，数据:', requestData)
+        console.log('执行添加操作')
         response = await axios.post('/api/behaviors', requestData)
-        console.log('添加响应:', response)
-        ElMessage.success('添加成功')
+        console.log('添加响应:', response.data)
       }
 
       if (response && response.data) {
         if (form.value.id) {
-          // 更新现有记录
           const index = behaviors.value.findIndex(b => b.id === form.value.id)
           if (index !== -1) {
             behaviors.value[index] = response.data
           }
         } else {
-          // 添加新记录到列表开头
           behaviors.value.unshift(response.data)
         }
         
+        ElMessage.success(form.value.id ? '更新成功' : '添加成功')
         dialogVisible.value = false
+        
+        // 重置表单前记录当前数据
+        console.log('重置表单前的数据:', { ...form.value })
+        
+        // 重置表单
         resetForm()
+        
+        console.log('重置表单后的数据:', { ...form.value })
       }
     } catch (error) {
       console.error('操作失败:', error)
-      console.error('错误响应:', error.response)
+      console.error('错误详情:', {
+        response: error.response?.data,
+        status: error.response?.status,
+        formData: { ...form.value },
+        requestData
+      })
       
       let errorMessage = error.response?.data?.message || (form.value.id ? '更新失败' : '添加失败')
       
-      // 处理特定的错误情况
       if (error.response?.status === 404) {
         errorMessage = '找不到要更新的记录，请刷新页面后重试'
-        console.log('尝试刷新列表获取最新数据')
         await fetchBehaviors()
-      } else if (error.response?.status === 400) {
-        errorMessage = '请求数据格式错误，请检查输入'
-      } else if (error.response?.status === 500) {
-        errorMessage = '服务器错误，请稍后重试'
       }
       
       ElMessage.error(errorMessage)
-      console.log('错误详情:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        url: error.config?.url,
-        method: error.config?.method,
-        requestData: error.config?.data ? JSON.parse(error.config.data) : requestData
-      })
     }
   } catch (error) {
     console.error('表单验证失败:', error)
@@ -503,7 +511,7 @@ const resetForm = () => {
     behavior_type: '',
     description: '',
     date: new Date().toISOString().slice(0, 19).replace('T', ' '),
-    image_url: null
+    image_url: ''
   }
   if (formRef.value) {
     formRef.value.resetFields()
@@ -619,9 +627,9 @@ const getImageUrl = (url) => {
     return url
   }
   
-  // 如果不以/开头，添加/uploads/
+  // 如果不以/开头，添加/uploads/behaviors/
   if (!url.startsWith('/')) {
-    return `/uploads/${url}`
+    return `/uploads/behaviors/${url}`
   }
   
   return url

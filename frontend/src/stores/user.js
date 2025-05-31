@@ -27,9 +27,8 @@ export const useUserStore = defineStore('user', {
   actions: {
     async login(username, password) {
       try {
-        console.log('开始登录请求:', { username })
-        
-        const response = await api.post('/api/login', {
+        console.log('开始登录请求:', { username })    
+        const response = await api.post('/api/auth/login', {
           username,
           password
         })

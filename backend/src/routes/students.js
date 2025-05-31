@@ -86,14 +86,24 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
 // 更新学生
 router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, next) => {
   try {
-    const { name, student_id, grade, class: className, address, emergency_contact, emergency_phone, notes } = req.body;
-    const photo_url = req.file ? `/uploads/students/${req.file.filename}` : undefined;
+    const { name, student_id, grade, class: className, address, emergency_contact, emergency_phone, notes, photo_url: existingPhotoUrl } = req.body;
+    
+    // 如果上传了新图片，使用新图片的URL；否则保留原有的URL
+    const photo_url = req.file ? `/uploads/students/${req.file.filename}` : existingPhotoUrl;
 
     let updateFields = [];
     let params = [];
 
     const fields = {
-      name, student_id, grade, class: className, address, emergency_contact, emergency_phone, notes
+      name, 
+      student_id, 
+      grade, 
+      class: className, 
+      address, 
+      emergency_contact, 
+      emergency_phone, 
+      notes,
+      photo_url  // 添加photo_url到更新字段中
     };
 
     for (const [key, value] of Object.entries(fields)) {
@@ -103,12 +113,14 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
       }
     }
 
-    if (photo_url) {
-      updateFields.push('photo_url = ?');
-      params.push(photo_url);
-    }
-
     params.push(req.params.id);
+
+    // 记录更新操作
+    logger.info('更新学生信息:', {
+      studentId: req.params.id,
+      fields: updateFields,
+      photoUrl: photo_url
+    });
 
     await run(
       `UPDATE students SET ${updateFields.join(', ')} WHERE id = ?`,
@@ -118,6 +130,7 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
     const [updatedStudent] = await get('SELECT * FROM students WHERE id = ?', [req.params.id]);
     res.json(updatedStudent);
   } catch (err) {
+    logger.error('更新学生信息失败:', err);
     next(err);
   }
 });

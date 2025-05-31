@@ -142,7 +142,7 @@
         <el-form-item label="照片">
           <el-upload
             class="avatar-uploader"
-            action="/api/upload"
+            action="/api/upload?type=students"
             :show-file-list="false"
             :on-success="handlePhotoSuccess"
             :on-error="handlePhotoError"
@@ -193,7 +193,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, Plus, Picture } from '@element-plus/icons-vue'
@@ -360,17 +360,31 @@ const getImageUrl = (url) => {
     return url
   }
   
-  // 如果不以/开头，添加/uploads/
+  // 如果不以/开头，添加/uploads/students/
   if (!url.startsWith('/')) {
-    return `/uploads/${url}`
+    return `/uploads/students/${url}`
   }
   
   return url
 }
 
 const handlePhotoSuccess = (response) => {
+  console.log('照片上传成功，完整响应数据:', response)
+  
   if (response.url) {
+    // 确保在设置前form.value存在
+    if (!form.value) {
+      form.value = {}
+    }
+    
+    console.log('设置photo_url前的完整表单数据:', { ...form.value })
     form.value.photo_url = response.url
+    console.log('设置photo_url后的完整表单数据:', { ...form.value })
+    console.log('photo_url的值和类型:', {
+      value: form.value.photo_url,
+      type: typeof form.value.photo_url
+    })
+    
     ElMessage.success('照片上传成功')
   } else {
     console.error('无效的响应格式:', response)
@@ -404,26 +418,56 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     
     loading.value = true
-    let response
+    
+    // 在构建submitData前检查表单数据
+    console.log('表单完整数据:', {
+      id: form.value.id,
+      name: form.value.name,
+      student_id: form.value.student_id,
+      grade: form.value.grade,
+      class: form.value.class,
+      photo_url: form.value.photo_url,  // 明确列出photo_url
+      address: form.value.address,
+      emergency_contact: form.value.emergency_contact,
+      emergency_phone: form.value.emergency_phone,
+      notes: form.value.notes
+    })
     
     const submitData = {
-      name: form.value.name.trim(),
-      student_id: form.value.student_id.trim(),
-      grade: form.value.grade,
-      class: form.value.class?.trim(),
-      photo_url: form.value.photo_url,
-      address: form.value.address?.trim(),
-      emergency_contact: form.value.emergency_contact?.trim(),
-      emergency_phone: form.value.emergency_phone?.trim(),
-      notes: form.value.notes?.trim()
+      name: form.value.name?.trim() || '',
+      student_id: form.value.student_id?.trim() || '',
+      grade: form.value.grade || '',
+      class: form.value.class?.trim() || '',
+      photo_url: form.value.photo_url || '',  // 确保不会是undefined
+      address: form.value.address?.trim() || '',
+      emergency_contact: form.value.emergency_contact?.trim() || '',
+      emergency_phone: form.value.emergency_phone?.trim() || '',
+      notes: form.value.notes?.trim() || ''
     }
 
+    // 打印完整的提交数据
+    console.log('完整的提交数据:', submitData)
+    console.log('photo_url的值:', submitData.photo_url)
+    console.log('photo_url的类型:', typeof submitData.photo_url)
+
+    let response
     if (form.value.id) {
-      response = await axios.put(`/api/students/${form.value.id}`, submitData)
-      ElMessage.success('更新成功')
+      console.log('执行更新操作，ID:', form.value.id)
+      // 直接使用JSON.stringify确保数据正确传输
+      const requestData = JSON.stringify(submitData)
+      console.log('发送到服务器的原始数据:', requestData)
+      
+      response = await axios.put(`/api/students/${form.value.id}`, submitData, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      console.log('更新响应数据:', JSON.stringify(response.data, null, 2))
     } else {
+      console.log('执行添加操作')
       response = await axios.post('/api/students', submitData)
-      ElMessage.success('添加成功')
+      console.log('添加响应数据:', JSON.stringify(response.data, null, 2))
     }
     
     if (response && response.data) {
@@ -436,11 +480,39 @@ const handleSubmit = async () => {
         }
       }
       
+      ElMessage.success(form.value.id ? '更新成功' : '添加成功')
       dialogVisible.value = false
+      
+      // 重置表单前保存当前数据
+      const currentData = { ...form.value }
+      console.log('重置表单前的完整数据:', currentData)
+      
+      // 重置表单
       formRef.value.resetFields()
+      form.value = {
+        id: null,
+        name: '',
+        student_id: '',
+        class: '',
+        grade: '',
+        photo_url: '',
+        address: '',
+        emergency_contact: '',
+        emergency_phone: '',
+        notes: ''
+      }
+      
+      console.log('重置表单后的完整数据:', form.value)
     }
   } catch (error) {
-    console.error('提交失败:', error.response?.data || error)
+    console.error('提交失败:', error)
+    console.error('错误详情:', {
+      formData: form.value,
+      submitData,
+      error: error.message,
+      response: error.response?.data
+    })
+    
     if (error.response?.data?.message) {
       ElMessage.error(error.response.data.message)
     } else if (error.message) {
