@@ -139,27 +139,59 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
   try {
     const { name, student_id, grade, class: className, teacher, address, emergency_contact, emergency_phone, notes, photo_url } = req.body;
     
+    // 获取当前学生数据
+    const [currentStudent] = await get('SELECT * FROM students WHERE id = ?', [req.params.id]);
+    if (!currentStudent) {
+      return res.status(404).json({ message: '未找到该学生' });
+    }
+
+    // 构建更新字段
+    const updates = [];
+    const values = [];
+    const fields = {
+      name, student_id, grade, class: className, teacher, photo_url,
+      address, emergency_contact, emergency_phone, notes
+    };
+
+    // 只更新提供的字段
+    Object.entries(fields).forEach(([key, value]) => {
+      if (value !== undefined) {
+        updates.push(`${key === 'class' ? 'class' : key} = ?`);
+        values.push(value);
+      }
+    });
+
+    // 如果没有要更新的字段，直接返回当前数据
+    if (updates.length === 0) {
+      return res.json(currentStudent);
+    }
+
+    // 添加ID到values数组
+    values.push(req.params.id);
+
+    // 执行更新
     await run(
-      `UPDATE students 
-       SET name = ?, student_id = ?, grade = ?, class = ?, teacher = ?, photo_url = ?, 
-           address = ?, emergency_contact = ?, emergency_phone = ?, notes = ?
-       WHERE id = ?`,
-      [name, student_id, grade, className, teacher, photo_url, address, emergency_contact, emergency_phone, notes, req.params.id]
+      `UPDATE students SET ${updates.join(', ')} WHERE id = ?`,
+      values
     );
 
-    res.json({
-      id: parseInt(req.params.id),
-      name,
-      student_id,
-      grade,
-      class: className,
-      teacher,
-      photo_url,
-      address,
-      emergency_contact,
-      emergency_phone,
-      notes
+    // 获取更新后的数据
+    const [updatedStudent] = await get('SELECT * FROM students WHERE id = ?', [req.params.id]);
+
+    logger.logOperation({
+      type: 'update',
+      module: 'students',
+      description: `更新学生信息`,
+      status: 'success',
+      username: req.user.username,
+      ip: req.ip,
+      details: {
+        id: req.params.id,
+        updatedFields: Object.keys(fields).filter(key => fields[key] !== undefined)
+      }
     });
+
+    res.json(updatedStudent);
   } catch (err) {
     next(err);
   }

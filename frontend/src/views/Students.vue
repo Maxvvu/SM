@@ -56,6 +56,9 @@
           </el-select>
         </div>
         <div class="action-group">
+          <el-button type="primary" @click="handleBatchEdit" :disabled="!selectedStudents.length">
+            批量修改
+          </el-button>
           <el-button type="danger" @click="handleBatchDelete" :disabled="!selectedStudents.length">
             批量删除
           </el-button>
@@ -287,6 +290,86 @@
           <el-button @click="dialogVisible = false">取消</el-button>
           <el-button type="primary" @click="handleSubmit" :loading="loading">
             {{ form.id ? '更新' : '添加' }}
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 添加批量编辑对话框 -->
+    <el-dialog
+      v-model="batchEditDialogVisible"
+      title="批量修改"
+      width="600px"
+    >
+      <el-form
+        ref="batchFormRef"
+        :model="batchForm"
+        label-width="100px"
+      >
+        <el-form-item label="选择字段">
+          <el-select
+            v-model="selectedFields"
+            multiple
+            placeholder="请选择要修改的字段"
+            style="width: 100%"
+          >
+            <el-option label="年级" value="grade" />
+            <el-option label="班级" value="class" />
+            <el-option label="班主任" value="teacher" />
+          </el-select>
+        </el-form-item>
+
+        <!-- 年级字段 -->
+        <el-form-item
+          v-if="selectedFields.includes('grade')"
+          label="年级"
+        >
+          <el-input
+            v-model="batchForm.gradeYear"
+            placeholder="请输入年份"
+            @input="handleBatchGradeInput"
+            type="number"
+            :min="2022"
+          >
+            <template #append>级</template>
+          </el-input>
+        </el-form-item>
+
+        <!-- 班级字段 -->
+        <el-form-item
+          v-if="selectedFields.includes('class')"
+          label="班级"
+        >
+          <el-input
+            v-model="batchForm.class"
+            placeholder="请输入班级"
+          />
+        </el-form-item>
+
+        <!-- 班主任字段 -->
+        <el-form-item
+          v-if="selectedFields.includes('teacher')"
+          label="班主任"
+        >
+          <el-input
+            v-model="batchForm.teacher"
+            placeholder="请输入班主任姓名"
+          />
+        </el-form-item>
+
+        <el-alert
+          v-if="selectedStudents.length"
+          type="warning"
+          :title="'已选择 ' + selectedStudents.length + ' 名学生'"
+          show-icon
+          style="margin-bottom: 20px"
+        />
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="batchEditDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="handleBatchEditSubmit" :loading="loading">
+            确认修改
           </el-button>
         </span>
       </template>
@@ -852,6 +935,122 @@ const handleGradeInput = (value) => {
   }
 }
 
+// 添加批量编辑相关的响应式变量
+const batchEditDialogVisible = ref(false)
+const selectedFields = ref([])
+const batchForm = ref({
+  gradeYear: '',
+  grade: '',
+  class: '',
+  teacher: ''
+})
+const batchFormRef = ref(null)
+
+// 处理批量编辑按钮点击
+const handleBatchEdit = () => {
+  if (!selectedStudents.value.length) {
+    ElMessage.warning('请先选择要修改的学生')
+    return
+  }
+  
+  // 重置表单
+  selectedFields.value = []
+  batchForm.value = {
+    gradeYear: '',
+    grade: '',
+    class: '',
+    teacher: ''
+  }
+  
+  batchEditDialogVisible.value = true
+}
+
+// 处理批量年级输入
+const handleBatchGradeInput = (value) => {
+  if (value) {
+    const year = parseInt(value)
+    if (year >= 2022) {
+      batchForm.value.grade = `${year}级`
+    }
+  } else {
+    batchForm.value.grade = ''
+  }
+}
+
+// 处理批量编辑提交
+const handleBatchEditSubmit = async () => {
+  if (!selectedFields.value.length) {
+    ElMessage.warning('请选择要修改的字段')
+    return
+  }
+
+  try {
+    loading.value = true
+    
+    // 构建更新数据
+    const updateData = {}
+    if (selectedFields.value.includes('grade')) {
+      if (!batchForm.value.grade) {
+        ElMessage.warning('请输入年级')
+        return
+      }
+      updateData.grade = batchForm.value.grade
+    }
+    if (selectedFields.value.includes('class')) {
+      if (!batchForm.value.class) {
+        ElMessage.warning('请输入班级')
+        return
+      }
+      // 处理班级数据，移除末尾的"班"字（如果有）
+      updateData.class = batchForm.value.class?.trim().replace(/班$/, '')
+    }
+    if (selectedFields.value.includes('teacher')) {
+      if (!batchForm.value.teacher) {
+        ElMessage.warning('请输入班主任姓名')
+        return
+      }
+      updateData.teacher = batchForm.value.teacher?.trim()
+    }
+
+    console.log('批量更新数据:', updateData)
+    console.log('选中的学生:', selectedStudents.value)
+
+    // 创建批量更新请求的Promise数组
+    const updatePromises = selectedStudents.value.map(async student => {
+      try {
+        const response = await axios.put(`/api/students/${student.id}`, updateData)
+        return response.data
+      } catch (error) {
+        console.error(`更新学生 ${student.name}(ID: ${student.id}) 失败:`, error)
+        throw error
+      }
+    })
+
+    // 等待所有更新请求完成
+    await Promise.all(updatePromises)
+      .then(() => {
+        ElMessage.success('批量修改成功')
+        // 重新获取学生列表
+        fetchStudents()
+        // 关闭对话框
+        batchEditDialogVisible.value = false
+      })
+      .catch(error => {
+        console.error('批量更新过程中出现错误:', error)
+        ElMessage.error('部分或全部学生更新失败，请检查后重试')
+      })
+  } catch (error) {
+    console.error('批量修改失败:', error)
+    if (error.response?.data?.message) {
+      ElMessage.error(error.response.data.message)
+    } else {
+      ElMessage.error('批量修改失败，请稍后重试')
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
 onMounted(() => {
   fetchStudents()
 })
@@ -909,6 +1108,11 @@ onMounted(() => {
 .action-group {
   display: flex;
   gap: 12px;
+  align-items: center;
+}
+
+.action-group .el-button {
+  margin-left: 0;
 }
 
 .grade-tag {
@@ -1142,5 +1346,20 @@ onMounted(() => {
   background-color: #f5f7fa;
   border-color: #e4e7ed;
   color: #606266;
+}
+
+/* 添加批量编辑对话框的样式 */
+:deep(.el-select .el-select__tags) {
+  flex-wrap: wrap;
+  max-height: 36px;
+  overflow: hidden;
+}
+
+:deep(.el-select .el-select__tags-text) {
+  display: inline-block;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style> 
