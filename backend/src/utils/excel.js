@@ -38,18 +38,32 @@ async function createStudentTemplate() {
     address: '北京市海淀区XX街XX号',
     emergency_contact: '张父',
     emergency_phone: '13800138000',
-    notes: '这是一条示例数据'
+    notes: '这是一条示例数据，年级可以填写"高一"、"高二"、"高三"或"YYYY级"格式'
   });
 
-  // 设置年级选项
-  const gradeOptions = ['高一', '高二', '高三'].join(',');
-
-  // 设置每列的数据验证
-  worksheet.dataValidations.add('C2:C1000', {
-    type: 'list',
-    allowBlank: true,
-    formulae: [`"${gradeOptions}"`]
+  // 添加第二个示例
+  worksheet.addRow({
+    name: '李四（示例）',
+    student_id: 'S002',
+    grade: '2024级',
+    class: '2班',
+    teacher: '王老师',
+    address: '北京市朝阳区XX路XX号',
+    emergency_contact: '李母',
+    emergency_phone: '13900139000',
+    notes: ''
   });
+
+  // 设置年级说明
+  worksheet.getCell('C1').note = {
+    texts: [{
+      text: '可以填写：\n1. 高一、高二、高三\n2. YYYY级（如：2024级）',
+      font: {
+        size: 12,
+        color: { argb: 'FF0000FF' }
+      }
+    }]
+  };
 
   // 冻结表头
   worksheet.views = [

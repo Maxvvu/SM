@@ -89,14 +89,38 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
     const { name, student_id, grade, class: className, teacher, address, emergency_contact, emergency_phone, notes, photo_url } = req.body;
 
     // 验证年级
-    if (!['高一', '高二', '高三'].includes(grade)) {
-      return res.status(400).json({ message: '无效的年级' });
+    if (!grade) {
+      return res.status(400).json({ message: '年级不能为空' });
+    }
+    
+    // 验证年级格式
+    const validGrades = ['高一', '高二', '高三'];
+    const yearGradePattern = /^\d{4}级$/;
+    const yearPattern = /^\d{4}$/;
+    
+    if (!validGrades.includes(grade) && !yearGradePattern.test(grade) && !yearPattern.test(grade)) {
+      return res.status(400).json({ message: '无效的年级格式' });
+    }
+    
+    // 处理纯数字年份，添加"级"后缀
+    let finalGrade = grade;
+    if (yearPattern.test(grade)) {
+      finalGrade = `${grade}级`;
+    }
+    
+    // 如果是年份格式，验证年份范围
+    if (yearGradePattern.test(finalGrade) || yearPattern.test(grade)) {
+      const year = parseInt(yearPattern.test(grade) ? grade : finalGrade);
+      const currentYear = new Date().getFullYear();
+      if (year < currentYear - 5 || year > currentYear + 5) {
+        return res.status(400).json({ message: '年级年份必须在合理范围内' });
+      }
     }
 
     const result = await run(
       `INSERT INTO students (name, student_id, grade, class, teacher, photo_url, address, emergency_contact, emergency_phone, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, student_id, grade, className, teacher, photo_url, address, emergency_contact, emergency_phone, notes]
+      [name, student_id, finalGrade, className, teacher, photo_url, address, emergency_contact, emergency_phone, notes]
     );
 
     logger.logOperation({
@@ -151,16 +175,46 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
     }
 
     // 验证年级
-    if (grade && !['高一', '高二', '高三'].includes(grade)) {
-      return res.status(400).json({ message: '无效的年级' });
+    let finalGrade = grade;
+    if (grade) {
+      const validGrades = ['高一', '高二', '高三'];
+      const yearGradePattern = /^\d{4}级$/;
+      const yearPattern = /^\d{4}$/;
+      
+      // 如果是纯数字年份，添加"级"后缀
+      if (yearPattern.test(grade)) {
+        finalGrade = `${grade}级`;
+      }
+      
+      // 验证年级格式
+      if (!validGrades.includes(grade) && !yearGradePattern.test(grade) && !yearPattern.test(grade)) {
+        return res.status(400).json({ message: '无效的年级格式' });
+      }
+      
+      // 如果是年份格式，验证年份范围
+      if (yearGradePattern.test(finalGrade) || yearPattern.test(grade)) {
+        const year = parseInt(yearPattern.test(grade) ? grade : finalGrade);
+        const currentYear = new Date().getFullYear();
+        if (year < currentYear - 5 || year > currentYear + 5) {
+          return res.status(400).json({ message: '年级年份必须在合理范围内' });
+        }
+      }
     }
 
     // 构建更新字段
     const updates = [];
     const values = [];
     const fields = {
-      name, student_id, grade, class: className, teacher, photo_url,
-      address, emergency_contact, emergency_phone, notes
+      name, 
+      student_id, 
+      grade: finalGrade, // 使用处理后的年级值
+      class: className, 
+      teacher, 
+      photo_url,
+      address, 
+      emergency_contact, 
+      emergency_phone, 
+      notes
     };
 
     // 只更新提供的字段
@@ -283,18 +337,22 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
       }
       
       // 验证年级格式
-      const gradePattern = /^\d{4}级$/;
-      if (!gradePattern.test(student.grade)) {
+      const validGrades = ['高一', '高二', '高三'];
+      const yearGradePattern = /^\d{4}级$/;
+      
+      if (!validGrades.includes(student.grade) && !yearGradePattern.test(student.grade)) {
         errors.push(`第${rowNumber}行：年级格式必须为"YYYY级"，例如"2025级"`);
         return;
       }
       
-      // 验证年级范围
-      const gradeYear = parseInt(student.grade);
-      const currentYear = new Date().getFullYear();
-      if (gradeYear < currentYear || gradeYear > currentYear + 3) {
-        errors.push(`第${rowNumber}行：年级必须在当前年份到未来3年之间`);
-        return;
+      // 如果是年份格式，验证年份范围
+      if (yearGradePattern.test(student.grade)) {
+        const year = parseInt(student.grade);
+        const currentYear = new Date().getFullYear();
+        if (year < currentYear - 5 || year > currentYear + 5) {
+          errors.push(`第${rowNumber}行：年级年份必须在合理范围内`);
+          return;
+        }
       }
       
       students.push(student);

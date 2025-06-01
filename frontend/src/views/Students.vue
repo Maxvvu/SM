@@ -27,7 +27,7 @@
             <el-option
               v-for="grade in grades"
               :key="grade"
-              :label="grade"
+              :label="getGradeFilterDisplay(grade)"
               :value="grade"
             >
               <el-tag
@@ -35,7 +35,7 @@
                 size="small"
                 class="grade-tag"
               >
-                {{ grade }}
+                {{ getGradeFilterDisplay(grade) }}
               </el-tag>
             </el-option>
           </el-select>
@@ -218,7 +218,15 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="年级" prop="grade">
-              <el-select v-model="form.grade" placeholder="请选择年级" style="width: 100%">
+              <el-select
+                v-model="form.grade"
+                placeholder="请选择年级"
+                style="width: 100%"
+                allow-create
+                filterable
+                :filter-method="handleGradeFilter"
+                @blur="handleGradeBlur"
+              >
                 <el-option label="高一" value="高一" />
                 <el-option label="高二" value="高二" />
                 <el-option label="高三" value="高三" />
@@ -412,15 +420,33 @@ const rules = {
     { pattern: /^[A-Za-z0-9]+$/, message: '学号只能包含字母和数字', trigger: 'blur' }
   ],
   grade: [
-    { required: true, message: '请选择年级', trigger: 'change' },
+    { required: true, message: '请选择或输入年级', trigger: 'change' },
     {
       validator: (rule, value, callback) => {
         if (!value) {
-          callback(new Error('请选择年级'))
-        } else if (!['高一', '高二', '高三'].includes(value)) {
-          callback(new Error('请选择正确的年级'))
-        } else {
+          callback(new Error('请选择或输入年级'))
+        } else if (['高一', '高二', '高三'].includes(value)) {
           callback()
+        } else if (/^\d{4}级$/.test(value)) {
+          // 验证年份范围
+          const year = parseInt(value)
+          const currentYear = new Date().getFullYear()
+          if (year >= currentYear - 5 && year <= currentYear + 5) {
+            callback()
+          } else {
+            callback(new Error('年级年份必须在合理范围内'))
+          }
+        } else if (/^\d{4}$/.test(value)) {
+          // 验证纯数字年份范围
+          const year = parseInt(value)
+          const currentYear = new Date().getFullYear()
+          if (year >= currentYear - 5 && year <= currentYear + 5) {
+            callback()
+          } else {
+            callback(new Error('年级年份必须在合理范围内'))
+          }
+        } else {
+          callback(new Error('年级格式不正确，请输入"高一"、"高二"、"高三"或4位数年份'))
         }
       },
       trigger: 'change'
@@ -462,10 +488,43 @@ const rules = {
   ]
 }
 
-// 修改grades计算属性（用于过滤选项）
+// 修改grades计算属性
 const grades = computed(() => {
-  return ['高一', '高二', '高三'];
-})
+  // 获取固定的年级选项
+  const fixedGrades = ['高一', '高二', '高三'];
+  
+  // 从学生列表中获取所有年级
+  const yearGrades = new Set();
+  students.value.forEach(student => {
+    if (student.grade && !fixedGrades.includes(student.grade)) {
+      yearGrades.add(student.grade);
+    }
+  });
+  
+  // 合并固定年级和年份年级，并排序
+  const allGrades = [...fixedGrades, ...Array.from(yearGrades)].sort((a, b) => {
+    // 如果都是"高X"格式，按序号排序
+    if (a.startsWith('高') && b.startsWith('高')) {
+      return a.localeCompare(b);
+    }
+    
+    // 如果都是年份格式，按年份排序
+    const yearA = parseInt(a) || 9999;
+    const yearB = parseInt(b) || 9999;
+    return yearA - yearB;
+  });
+  
+  return allGrades;
+});
+
+// 修改筛选器的显示样式
+const getGradeFilterDisplay = (grade) => {
+  if (['高一', '高二', '高三'].includes(grade)) {
+    return grade;
+  }
+  // 如果是年份格式（如"2024级"），保持原样显示
+  return grade;
+};
 
 // 获取可用的班级列表
 const availableClasses = computed(() => {
@@ -491,17 +550,26 @@ const availableClasses = computed(() => {
 
 // 根据年级获取标签类型
 const getGradeTagType = (grade) => {
-  switch (grade) {
-    case '高一':
-      return 'success';
-    case '高二':
-      return 'warning';
-    case '高三':
-      return 'danger';
-    default:
-      return '';
+  if (!grade) return 'info';
+  
+  if (grade === '高一') return 'success';
+  if (grade === '高二') return 'warning';
+  if (grade === '高三') return 'danger';
+  
+  // 处理年份格式（如"2024级"）
+  const yearMatch = grade.match(/^(\d{4})级$/);
+  if (yearMatch) {
+    const year = parseInt(yearMatch[1]);
+    const currentYear = new Date().getFullYear();
+    const yearDiff = year - currentYear;
+    
+    if (yearDiff <= 0) return 'success';      // 当前或以前的年级
+    if (yearDiff === 1) return 'warning';     // 下一年级
+    return 'danger';                          // 未来年级
   }
-}
+  
+  return 'info';  // 默认返回info类型
+};
 
 // 添加分页相关的响应式变量
 const currentPage = ref(1)
@@ -730,11 +798,17 @@ const handleSubmit = async () => {
     // 处理班级数据，移除末尾的"班"字（如果有）
     const classValue = form.value.class?.trim().replace(/班$/, '')
     
+    // 处理年级格式
+    let gradeValue = form.value.grade?.trim()
+    if (/^\d{4}$/.test(gradeValue)) {
+      gradeValue = `${gradeValue}级`
+    }
+    
     const submitData = {
       name: form.value.name?.trim() || '',
       student_id: form.value.student_id?.trim() || '',
-      grade: form.value.grade || '',
-      class: classValue,  // 使用处理后的班级值
+      grade: gradeValue || '',
+      class: classValue,
       teacher: form.value.teacher?.trim() || '',
       photo_url: form.value.photo_url || '',
       address: form.value.address?.trim() || '',
@@ -745,27 +819,16 @@ const handleSubmit = async () => {
 
     // 打印完整的提交数据
     console.log('完整的提交数据:', submitData)
-    console.log('photo_url的值:', submitData.photo_url)
-    console.log('photo_url的类型:', typeof submitData.photo_url)
 
     let response
     if (form.value.id) {
       console.log('执行更新操作，ID:', form.value.id)
-      // 直接使用JSON.stringify确保数据正确传输
-      const requestData = JSON.stringify(submitData)
-      console.log('发送到服务器的原始数据:', requestData)
-      
-      response = await axios.put(`/api/students/${form.value.id}`, submitData, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      console.log('更新响应数据:', JSON.stringify(response.data, null, 2))
+      response = await axios.put(`/api/students/${form.value.id}`, submitData)
+      console.log('更新响应数据:', response.data)
     } else {
       console.log('执行添加操作')
       response = await axios.post('/api/students', submitData)
-      console.log('添加响应数据:', JSON.stringify(response.data, null, 2))
+      console.log('添加响应数据:', response.data)
     }
     
     if (response && response.data) {
@@ -879,9 +942,23 @@ const handleBatchDelete = () => {
 }
 
 // 修改年级输入处理函数
-const handleGradeInput = (value) => {
-  form.value.grade = value;
-}
+const handleGradeFilter = (query) => {
+  // 如果输入的是数字，自动添加"级"后缀
+  if (/^\d{4}$/.test(query)) {
+    const year = parseInt(query)
+    const currentYear = new Date().getFullYear()
+    if (year >= currentYear - 5 && year <= currentYear + 5) {
+      form.value.grade = query
+    }
+  }
+};
+
+// 在年级输入框失去焦点时处理
+const handleGradeBlur = () => {
+  if (/^\d{4}$/.test(form.value.grade)) {
+    form.value.grade = `${form.value.grade}级`
+  }
+};
 
 // 添加批量编辑相关的响应式变量
 const batchEditDialogVisible = ref(false)
