@@ -168,19 +168,37 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
 // 删除学生
 router.delete('/:id', authenticateToken, async (req, res, next) => {
   try {
-    await run('DELETE FROM students WHERE id = ?', [req.params.id]);
-    logger.logOperation({
-      type: 'delete',
-      module: 'students',
-      description: `删除学生`,
-      status: 'success',  
-      username: req.user.username,
-      ip: req.ip,
-      details: {
-        id: req.params.id,
-      }
-    });
-    res.status(204).send();
+    // 开始事务
+    await run('BEGIN TRANSACTION');
+
+    try {
+      // 先删除该学生的所有行为记录
+      await run('DELETE FROM behaviors WHERE student_id = ?', [req.params.id]);
+      
+      // 再删除学生记录
+      await run('DELETE FROM students WHERE id = ?', [req.params.id]);
+
+      // 提交事务
+      await run('COMMIT');
+
+      logger.logOperation({
+        type: 'delete',
+        module: 'students',
+        description: `删除学生`,
+        status: 'success',  
+        username: req.user.username,
+        ip: req.ip,
+        details: {
+          id: req.params.id,
+        }
+      });
+
+      res.status(204).send();
+    } catch (err) {
+      // 如果出错，回滚事务
+      await run('ROLLBACK');
+      throw err;
+    }
   } catch (err) {
     next(err);
   }
