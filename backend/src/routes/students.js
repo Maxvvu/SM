@@ -240,9 +240,18 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         return;
       }
       
-      // 验证年级
-      if (!['高一', '高二', '高三'].includes(student.grade)) {
-        errors.push(`第${rowNumber}行：年级只能是高一、高二、高三`);
+      // 验证年级格式
+      const gradePattern = /^\d{4}级$/;
+      if (!gradePattern.test(student.grade)) {
+        errors.push(`第${rowNumber}行：年级格式必须为"YYYY级"，例如"2025级"`);
+        return;
+      }
+      
+      // 验证年级范围
+      const gradeYear = parseInt(student.grade);
+      const currentYear = new Date().getFullYear();
+      if (gradeYear < currentYear || gradeYear > currentYear + 3) {
+        errors.push(`第${rowNumber}行：年级必须在当前年份到未来3年之间`);
         return;
       }
       

@@ -215,11 +215,15 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="年级" prop="grade">
-              <el-select v-model="form.grade" placeholder="请选择年级" style="width: 100%">
-                <el-option label="高一" value="高一" />
-                <el-option label="高二" value="高二" />
-                <el-option label="高三" value="高三" />
-              </el-select>
+              <el-input
+                v-model="form.gradeYear"
+                placeholder="请输入年份"
+                @input="handleGradeInput"
+                type="number"
+                :min="2022"
+              >
+                <template #append>级</template>
+              </el-input>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -305,11 +309,14 @@ const sortBy = ref('')
 const sortOrder = ref('')
 const searchQuery = ref('')
 
+const currentYear = new Date().getFullYear()
+
 const form = ref({
   name: '',
   student_id: '',
   class: '',
   grade: '',
+  gradeYear: '',
   teacher: '',
   photo_url: '',
   address: '',
@@ -330,7 +337,24 @@ const rules = {
     { pattern: /^[A-Za-z0-9]+$/, message: '学号只能包含字母和数字', trigger: 'blur' }
   ],
   grade: [
-    { required: true, message: '请选择年级', trigger: 'change' }
+    { required: true, message: '请输入年级', trigger: 'change' },
+    {
+      validator: (rule, value, callback) => {
+        if (!value) {
+          callback(new Error('请输入年级'))
+        } else if (!/^\d{4}级$/.test(value)) {
+          callback(new Error('年级格式不正确'))
+        } else {
+          const year = parseInt(value)
+          if (year < 2022) {
+            callback(new Error('年级不能早于2022年'))
+          } else {
+            callback()
+          }
+        }
+      },
+      trigger: 'change'
+    }
   ],
   class: [
     { required: true, message: '请输入班级', trigger: 'blur' },
@@ -368,8 +392,23 @@ const rules = {
   ]
 }
 
-// 预定义年级列表
-const grades = ['高一', '高二', '高三']
+// 修改grades计算属性（用于过滤选项）
+const grades = computed(() => {
+  // 从现有学生数据中提取所有年级
+  const gradeSet = new Set();
+  students.value.forEach(student => {
+    if (student.grade && /^\d{4}级$/.test(student.grade)) {
+      gradeSet.add(student.grade);
+    }
+  });
+  
+  // 转换为数组并按年份排序（降序，最新的年级在前）
+  return Array.from(gradeSet).sort((a, b) => {
+    const yearA = parseInt(a);
+    const yearB = parseInt(b);
+    return yearB - yearA;
+  });
+})
 
 // 获取可用的班级列表
 const availableClasses = computed(() => {
@@ -395,16 +434,35 @@ const availableClasses = computed(() => {
 
 // 根据年级获取标签类型
 const getGradeTagType = (grade) => {
-  switch (grade) {
-    case '高一':
-      return 'success'
-    case '高二':
-      return 'warning'
-    case '高三':
-      return 'danger'
-    default:
-      return 'info'
+  if (!grade || !/^\d{4}级$/.test(grade)) {
+    return '';  // 使用默认颜色
   }
+  
+  const year = parseInt(grade);
+  const currentYear = new Date().getFullYear();
+  const yearDiff = year - currentYear;
+  
+  // 定义自定义颜色类型
+  const customTypes = {
+    'success-elegant': 'success',    // 翡翠绿
+    'warning-soft': 'warning',       // 温暖金
+    'primary-bright': 'primary',     // 天空蓝
+    'danger-light': 'danger',        // 珊瑚红
+    'info-calm': 'info',            // 薄雾蓝
+    'default-neutral': ''           // 优雅灰
+  };
+  
+  // 根据年份差值循环使用颜色
+  const colorKeys = Object.keys(customTypes);
+  const colorIndex = Math.abs(yearDiff) % colorKeys.length;
+  
+  // 当前年级和未来年级使用正向顺序
+  if (yearDiff >= 0) {
+    return customTypes[colorKeys[colorIndex]];
+  }
+  
+  // 历史年级使用反向顺序
+  return customTypes[colorKeys[colorKeys.length - 1 - colorIndex]];
 }
 
 // 添加分页相关的响应式变量
@@ -494,6 +552,7 @@ const handleAdd = () => {
     student_id: '',
     class: '',
     grade: '',
+    gradeYear: '',
     teacher: '',
     photo_url: '',
     address: '',
@@ -523,7 +582,12 @@ const fetchStudents = async () => {
 }
 
 const handleEdit = (row) => {
-  form.value = { ...row }
+  const formData = { ...row }
+  // 如果grade存在且格式正确，提取年份
+  if (formData.grade && /^\d{4}级$/.test(formData.grade)) {
+    formData.gradeYear = formData.grade.replace('级', '')
+  }
+  form.value = formData
   dialogVisible.value = true
 }
 
@@ -691,6 +755,7 @@ const handleSubmit = async () => {
         student_id: '',
         class: '',
         grade: '',
+        gradeYear: '',
         teacher: '',
         photo_url: '',
         address: '',
@@ -705,7 +770,6 @@ const handleSubmit = async () => {
     console.error('提交失败:', error)
     console.error('错误详情:', {
       formData: form.value,
-      submitData,
       error: error.message,
       response: error.response?.data
     })
@@ -774,6 +838,18 @@ const handleBatchDelete = () => {
     .catch(() => {
       // 用户取消删除操作
     })
+}
+
+// 修改年级输入处理函数
+const handleGradeInput = (value) => {
+  if (value) {
+    const year = parseInt(value)
+    if (year >= 2022) {
+      form.value.grade = `${year}级`
+    }
+  } else {
+    form.value.grade = ''
+  }
 }
 
 onMounted(() => {
@@ -1015,5 +1091,56 @@ onMounted(() => {
     justify-content: center;
     gap: 8px;
   }
+}
+
+/* 添加年级标签的自定义样式 */
+:deep(.el-tag) {
+  border-radius: 4px;
+  padding: 0 12px;
+  height: 24px;
+  line-height: 24px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-tag:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+:deep(.el-tag.el-tag--success) {
+  background-color: #f0f9eb;
+  border-color: #e1f3d8;
+  color: #67c23a;
+}
+
+:deep(.el-tag.el-tag--warning) {
+  background-color: #fdf6ec;
+  border-color: #faecd8;
+  color: #e6a23c;
+}
+
+:deep(.el-tag.el-tag--primary) {
+  background-color: #ecf5ff;
+  border-color: #d9ecff;
+  color: #409eff;
+}
+
+:deep(.el-tag.el-tag--danger) {
+  background-color: #fef0f0;
+  border-color: #fde2e2;
+  color: #f56c6c;
+}
+
+:deep(.el-tag.el-tag--info) {
+  background-color: #f4f4f5;
+  border-color: #e9e9eb;
+  color: #909399;
+}
+
+:deep(.el-tag:not([class*="el-tag--"])) {
+  background-color: #f5f7fa;
+  border-color: #e4e7ed;
+  color: #606266;
 }
 </style> 

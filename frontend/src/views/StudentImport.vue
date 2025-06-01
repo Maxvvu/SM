@@ -36,7 +36,7 @@
             <li>请下载模板文件，按照模板格式填写学生信息</li>
             <li>必填字段：学号、姓名、年级</li>
             <li>选填字段：班级、家庭住址、紧急联系人、联系人电话、备注</li>
-            <li>年级只能填写：高一、高二、高三</li>
+            <li>年级格式为"YYYY级"，例如"2025级"</li>
             <li>Excel文件大小不能超过5MB</li>
           </ol>
           <el-button type="success" @click="downloadTemplate">
