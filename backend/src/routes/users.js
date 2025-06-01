@@ -199,9 +199,51 @@ router.delete('/:id', authenticateToken, isAdmin, async (req, res, next) => {
       return res.status(403).json({ message: '不能删除管理员账户' });
     }
 
-    await run('DELETE FROM users WHERE id = ?', [id]);
-    res.status(204).send();
+    // 开始事务
+    await run('BEGIN TRANSACTION');
+
+    try {
+      // 先删除该用户的所有操作日志
+      await run('DELETE FROM operation_logs WHERE username = ?', [user.username]);
+      
+      // 再删除用户记录
+      await run('DELETE FROM users WHERE id = ?', [id]);
+
+      // 提交事务
+      await run('COMMIT');
+
+      // 记录删除操作（使用执行删除操作的管理员用户名）
+      logger.logOperation({
+        type: 'delete',
+        module: 'users',
+        description: '删除用户',
+        username: req.user.username,
+        status: 'success',
+        details: {
+          deletedUser: user.username,
+          deletedUserId: id
+        }
+      });
+
+      res.status(204).send();
+    } catch (err) {
+      // 如果出错，回滚事务
+      await run('ROLLBACK');
+      throw err;
+    }
   } catch (err) {
+    // 记录删除失败
+    logger.logOperation({
+      type: 'delete',
+      module: 'users',
+      description: '删除用户失败',
+      username: req.user.username,
+      status: 'error',
+      details: {
+        error: err.message,
+        userId: req.params.id
+      }
+    });
     next(err);
   }
 });
