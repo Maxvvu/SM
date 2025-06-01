@@ -43,6 +43,15 @@ router.post('/login', async (req, res, next) => {
           { expiresIn: '24h' }
         );
 
+        // 更新最后登录时间
+        const currentTime = new Date().toISOString();
+        await get('UPDATE users SET last_login = ? WHERE username = ?', [currentTime, username]);
+        
+        console.log('更新最后登录时间:', {
+          username,
+          lastLogin: currentTime
+        });
+
         const response = {
           token,
           userInfo: {

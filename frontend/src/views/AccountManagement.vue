@@ -19,7 +19,15 @@
         </el-table-column>
         <el-table-column prop="lastLogin" label="最后登录时间">
           <template #default="{ row }">
-            {{ row.lastLogin ? new Date(row.lastLogin).toLocaleString() : '从未登录' }}
+            {{ row.lastLogin ? new Date(row.lastLogin).toLocaleString('zh-CN', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false
+            }) : '从未登录' }}
           </template>
         </el-table-column>
         <el-table-column prop="status" label="状态">
@@ -95,7 +103,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import api from '../api'
+import request from '../utils/request'
 
 const loading = ref(false)
 const users = ref([])
@@ -122,74 +130,143 @@ const rules = {
 }
 
 const fetchUsers = async () => {
+  console.log('=== 开始获取用户列表 ===')
   loading.value = true
   try {
-    const response = await api.get('/api/users')
-    users.value = Array.isArray(response.data) ? response.data : []
-    console.log('获取到的用户列表:', users.value)
+    console.log('发送请求前的token:', localStorage.getItem('token'))
+    const response = await request.get('/api/users')
+    console.log('获取用户列表原始响应:', response)
+    
+    // 检查响应格式
+    if (Array.isArray(response)) {
+      users.value = response
+      console.log('用户列表数据已更新, 数量:', users.value.length)
+      console.log('用户列表详细数据:', JSON.stringify(users.value, null, 2))
+    } else {
+      console.warn('响应格式异常, 期望数组但收到:', typeof response)
+      ElMessage.warning('获取用户列表数据格式异常')
+    }
   } catch (error) {
-    console.error('获取用户列表失败:', error)
-    ElMessage.error('获取用户列表失败')
+    console.error('获取用户列表失败:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      headers: error.response?.headers
+    })
+    ElMessage.error(error.response?.data?.message || '获取用户列表失败')
   } finally {
     loading.value = false
+    console.log('=== 获取用户列表结束 ===')
   }
 }
 
 const handleAdd = () => {
+  console.log('=== 开始添加用户 ===')
   dialogType.value = 'add'
   form.value = {
     username: '',
     password: '',
     role: 'user'
   }
+  console.log('重置表单数据:', form.value)
   dialogVisible.value = true
 }
 
 const handleEdit = (row) => {
+  console.log('=== 开始编辑用户 ===')
+  console.log('待编辑的用户数据:', row)
   dialogType.value = 'edit'
   form.value = {
     id: row.id,
     username: row.username,
     role: row.role
   }
+  console.log('表单已填充数据:', form.value)
   dialogVisible.value = true
 }
 
 const handleSubmit = async () => {
-  if (!formRef.value) return
+  console.log('=== 开始提交表单 ===')
+  console.log('表单数据:', form.value)
+  console.log('操作类型:', dialogType.value)
   
-  await formRef.value.validate(async (valid) => {
+  if (!formRef.value) {
+    console.warn('表单引用不存在')
+    return
+  }
+  
+  try {
+    const valid = await formRef.value.validate()
+    console.log('表单验证结果:', valid)
+    
     if (valid) {
       try {
+        let response
         if (dialogType.value === 'add') {
-          await api.post('/api/users', form.value)
+          console.log('发送添加用户请求:', form.value)
+          response = await request.post('/api/users', form.value)
+          console.log('添加用户响应:', response)
           ElMessage.success('添加用户成功')
         } else {
-          await api.put(`/api/users/${form.value.id}`, form.value)
+          console.log('发送更新用户请求:', {
+            id: form.value.id,
+            data: form.value
+          })
+          response = await request.put(`/api/users/${form.value.id}`, form.value)
+          console.log('更新用户响应:', response)
           ElMessage.success('更新用户成功')
         }
         dialogVisible.value = false
-        fetchUsers()
+        await fetchUsers()
       } catch (error) {
+        console.error('操作失败:', {
+          type: dialogType.value,
+          error: error.message,
+          response: error.response?.data,
+          status: error.response?.status
+        })
         ElMessage.error(dialogType.value === 'add' ? '添加用户失败' : '更新用户失败')
       }
     }
-  })
+  } catch (error) {
+    console.error('表单验证失败:', error)
+  } finally {
+    console.log('=== 提交表单结束 ===')
+  }
 }
 
 const handleToggleStatus = async (row) => {
+  console.log('=== 开始切换用户状态 ===')
+  console.log('目标用户:', row)
+  console.log('当前状态:', row.status)
+  
   try {
-    await api.patch(`/api/users/${row.id}/status`, {
-      status: row.status === 'active' ? 'inactive' : 'active'
+    const newStatus = row.status === 'active' ? 'inactive' : 'active'
+    console.log('切换到新状态:', newStatus)
+    
+    const response = await request.patch(`/api/users/${row.id}/status`, {
+      status: newStatus
     })
+    console.log('状态更新响应:', response)
+    
     ElMessage.success('更新状态成功')
-    fetchUsers()
+    await fetchUsers()
   } catch (error) {
+    console.error('更新状态失败:', {
+      userId: row.id,
+      error: error.message,
+      response: error.response?.data
+    })
     ElMessage.error('更新状态失败')
+  } finally {
+    console.log('=== 切换用户状态结束 ===')
   }
 }
 
 const handleDelete = (row) => {
+  console.log('=== 开始删除用户 ===')
+  console.log('待删除用户:', row)
+  
   ElMessageBox.confirm('确认删除该用户？此操作不可恢复', '警告', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
@@ -197,14 +274,26 @@ const handleDelete = (row) => {
   })
     .then(async () => {
       try {
-        await api.delete(`/api/users/${row.id}`)
+        console.log('发送删除请求:', row.id)
+        const response = await request.delete(`/api/users/${row.id}`)
+        console.log('删除响应:', response)
+        
         ElMessage.success('删除用户成功')
-        fetchUsers()
+        await fetchUsers()
       } catch (error) {
+        console.error('删除失败:', {
+          userId: row.id,
+          error: error.message,
+          response: error.response?.data
+        })
         ElMessage.error('删除用户失败')
+      } finally {
+        console.log('=== 删除用户结束 ===')
       }
     })
-    .catch(() => {})
+    .catch(() => {
+      console.log('用户取消删除操作')
+    })
 }
 
 onMounted(() => {

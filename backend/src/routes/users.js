@@ -9,18 +9,34 @@ const router = express.Router();
 // 获取用户列表（需要管理员权限）
 router.get('/', authenticateToken, isAdmin, async (req, res, next) => {
   try {
+    console.log('开始获取用户列表...');
+    
     const users = await get(`
       SELECT 
         id, 
         username, 
         role,
         CASE WHEN status = 0 THEN 'inactive' ELSE 'active' END as status,
-        datetime(last_login, 'localtime') as lastLogin
+        last_login as lastLogin
       FROM users
       ORDER BY username
     `);
-    res.json(users);
+
+    console.log('原始用户数据:', users);
+
+    // 格式化日期
+    const formattedUsers = users.map(user => {
+      console.log('处理用户数据:', user.username, '最后登录时间:', user.lastLogin);
+      return {
+        ...user,
+        lastLogin: user.lastLogin ? new Date(user.lastLogin).toISOString() : null
+      };
+    });
+
+    console.log('格式化后的用户数据:', formattedUsers);
+    res.json(formattedUsers);
   } catch (err) {
+    console.error('获取用户列表失败:', err);
     next(err);
   }
 });
