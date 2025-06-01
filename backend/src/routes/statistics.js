@@ -52,7 +52,12 @@ router.get('/', authenticateToken, async (req, res, next) => {
 
     // 1. 获取学生总数
     console.info('开始获取学生总数...');
-    const studentCountQuery = 'SELECT COUNT(*) as count FROM students' + (grade ? ' WHERE grade = ?' : '');
+    const studentCountQuery = `
+      SELECT COUNT(*) as count 
+      FROM students 
+      WHERE grade IN ('高一', '高二', '高三')
+      ${grade ? ' AND grade = ?' : ''}
+    `;
     const [studentCount] = await get(studentCountQuery, grade ? [grade] : []);
     console.info('学生总数:', studentCount);
 
@@ -62,7 +67,8 @@ router.get('/', authenticateToken, async (req, res, next) => {
       SELECT COUNT(*) as count 
       FROM behaviors b 
       JOIN students s ON b.student_id = s.id 
-      WHERE 1=1 ${dateCondition} ${gradeCondition}
+      WHERE s.grade IN ('高一', '高二', '高三')
+      ${dateCondition} ${gradeCondition}
     `;
     const [behaviorCount] = await get(behaviorCountQuery, params);
     console.info('行为记录总数:', behaviorCount);
@@ -72,6 +78,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
     const gradeDistQuery = `
       SELECT grade, COUNT(*) as count
       FROM students
+      WHERE grade IN ('高一', '高二', '高三')
       GROUP BY grade
     `;
     const gradeDist = await get(gradeDistQuery);
@@ -434,7 +441,7 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
         FROM students s
         LEFT JOIN behaviors b ON s.id = b.student_id AND 1=1 ${dateCondition}
         LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
-        WHERE 1=1 ${gradeCondition}
+        WHERE s.grade IN ('高一', '高二', '高三') ${gradeCondition}
         GROUP BY s.grade
       )
       SELECT 
@@ -462,7 +469,7 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
         FROM students s
         LEFT JOIN behaviors b ON s.id = b.student_id AND 1=1 ${dateCondition}
         LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
-        WHERE 1=1 ${gradeCondition}
+        WHERE s.grade IN ('高一', '高二', '高三') ${gradeCondition}
         GROUP BY strftime('%Y-%m', COALESCE(b.date, date('now')))
       )
       SELECT 
@@ -484,7 +491,7 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
       FROM students s
       LEFT JOIN behaviors b ON s.id = b.student_id AND 1=1 ${dateCondition}
       LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
-      WHERE 1=1 ${gradeCondition}
+      WHERE s.grade IN ('高一', '高二', '高三') ${gradeCondition}
     `;
 
     // 执行查询

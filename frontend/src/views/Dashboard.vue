@@ -206,17 +206,17 @@ const fetchStudentStats = async () => {
             {
               name: '高一',
               value: gradeData['高一'] || 0,
-              itemStyle: { color: '#91cc75' }
+              itemStyle: { color: '#67c23a' }  // 绿色
             },
             {
               name: '高二',
               value: gradeData['高二'] || 0,
-              itemStyle: { color: '#fac858' }
+              itemStyle: { color: '#e6a23c' }  // 橙色
             },
             {
               name: '高三',
               value: gradeData['高三'] || 0,
-              itemStyle: { color: '#5470c6' }
+              itemStyle: { color: '#f56c6c' }  // 红色
             }
           ]
         }

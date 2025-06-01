@@ -173,12 +173,19 @@ const dateShortcuts = [
 
 // 初始化图表
 const initCharts = () => {
-  // 年级违纪率对比图
+  // 年级违纪率图表
   const gradeViolationChartInstance = echarts.init(gradeViolationChart.value)
   gradeViolationChartInstance.setOption({
+    title: {
+      text: '年级违纪率对比',
+      left: 'center'
+    },
     tooltip: {
       trigger: 'axis',
-      formatter: '{b}<br/>{a}: {c}%'
+      axisPointer: {
+        type: 'shadow'
+      },
+      formatter: '{b}: {c}%'
     },
     xAxis: {
       type: 'category',
@@ -195,12 +202,8 @@ const initCharts = () => {
       }
     },
     series: [{
-      name: '违纪率',
-      type: 'bar',
       data: [],
-      itemStyle: {
-        color: '#f56c6c'
-      },
+      type: 'bar',
       label: {
         show: true,
         position: 'top',
@@ -209,19 +212,24 @@ const initCharts = () => {
     }]
   })
 
-  // 违纪率趋势图
+  // 违纪率趋势图表
   const violationTrendChartInstance = echarts.init(violationTrendChart.value)
   violationTrendChartInstance.setOption({
+    title: {
+      text: '违纪率趋势',
+      left: 'center'
+    },
     tooltip: {
       trigger: 'axis',
-      formatter: function(params) {
-        return params[0].name + '<br/>' + params[0].seriesName + ': ' + params[0].value + '%'
-      }
+      formatter: '{b}: {c}%'
     },
     xAxis: {
       type: 'category',
-      boundaryGap: false,
-      data: []
+      data: [],
+      axisLabel: {
+        interval: 0,
+        rotate: 45
+      }
     },
     yAxis: {
       type: 'value',
@@ -231,43 +239,60 @@ const initCharts = () => {
       }
     },
     series: [{
-      name: '违纪率',
-      type: 'line',
       data: [],
+      type: 'line',
       smooth: true,
-      lineStyle: {
+      label: {
+        show: true,
+        position: 'top',
+        formatter: '{c}%'
+      },
+      itemStyle: {
         color: '#f56c6c'
       },
       areaStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          {
+        color: {
+          type: 'linear',
+          x: 0,
+          y: 0,
+          x2: 0,
+          y2: 1,
+          colorStops: [{
             offset: 0,
             color: 'rgba(245, 108, 108, 0.3)'
-          },
-          {
+          }, {
             offset: 1,
             color: 'rgba(245, 108, 108, 0.1)'
-          }
-        ])
+          }]
+        }
       }
     }]
   })
 
-  // 行为记录趋势图
+  // 行为记录趋势图表
   const timeChart = echarts.init(trendChart.value)
   timeChart.setOption({
+    title: {
+      text: '行为记录趋势',
+      left: 'center'
+    },
     tooltip: {
       trigger: 'axis'
     },
     legend: {
-      data: ['违纪', '优秀']
+      data: ['违纪', '优秀'],
+      top: 30
     },
     xAxis: {
       type: 'time',
-      boundaryGap: false
+      boundaryGap: false,
+      axisLabel: {
+        formatter: '{MM}月'
+      }
     },
     yAxis: {
-      type: 'value'
+      type: 'value',
+      name: '人数'
     },
     series: [
       {
@@ -276,6 +301,22 @@ const initCharts = () => {
         data: [],
         itemStyle: {
           color: '#f56c6c'
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [{
+              offset: 0,
+              color: 'rgba(245, 108, 108, 0.3)'
+            }, {
+              offset: 1,
+              color: 'rgba(245, 108, 108, 0.1)'
+            }]
+          }
         }
       },
       {
@@ -284,6 +325,22 @@ const initCharts = () => {
         data: [],
         itemStyle: {
           color: '#67c23a'
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [{
+              offset: 0,
+              color: 'rgba(103, 194, 58, 0.3)'
+            }, {
+              offset: 1,
+              color: 'rgba(103, 194, 58, 0.1)'
+            }]
+          }
         }
       }
     ]
@@ -315,14 +372,18 @@ const fetchData = async () => {
     }
 
     // 更新年级违纪率图表
+    const gradeData = data.gradeViolationRates.filter(item => 
+      ['高一', '高二', '高三'].includes(item.grade)
+    ).map(item => ({
+      value: item.violation_rate,
+      itemStyle: {
+        color: getGradeColor(item.violation_rate)
+      }
+    }))
+
     charts[0].setOption({
       series: [{
-        data: data.gradeViolationRates.map(item => ({
-          value: item.violation_rate,
-          itemStyle: {
-            color: getGradeColor(item.violation_rate)
-          }
-        }))
+        data: gradeData
       }]
     })
 
