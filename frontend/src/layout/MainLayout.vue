@@ -161,7 +161,7 @@ import {
   School
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import axios from 'axios'
+import request from '../utils/request'
 import { useUserStore } from '../stores/user'
 
 const route = useRoute()
@@ -264,7 +264,7 @@ const handlePasswordChange = async () => {
   await passwordFormRef.value.validate(async (valid) => {
     if (valid) {
       try {
-        await axios.post('/api/users/change-password', {
+        await request.post('/api/users/change-password', {
           oldPassword: passwordForm.value.oldPassword,
           newPassword: passwordForm.value.newPassword
         })
@@ -276,7 +276,7 @@ const handlePasswordChange = async () => {
           confirmPassword: ''
         }
       } catch (error) {
-        ElMessage.error('密码修改失败')
+        ElMessage.error(error.response?.data?.message || '密码修改失败')
       }
     }
   })

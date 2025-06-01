@@ -165,4 +165,60 @@ router.delete('/:id', authenticateToken, isAdmin, async (req, res, next) => {
   }
 });
 
+// 修改密码
+router.post('/change-password', authenticateToken, async (req, res, next) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const username = req.user.username;
+
+    // 获取用户信息
+    const [user] = await get('SELECT * FROM users WHERE username = ?', [username]);
+    if (!user) {
+      return res.status(404).json({ message: '用户不存在' });
+    }
+
+    // 验证旧密码
+    const isValidPassword = await bcrypt.compare(oldPassword, user.password);
+    if (!isValidPassword) {
+      return res.status(400).json({ message: '原密码错误' });
+    }
+
+    // 加密新密码
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 更新密码
+    await run('UPDATE users SET password = ? WHERE username = ?', [hashedPassword, username]);
+
+    // 记录密码修改操作
+    logger.logOperation({
+      type: 'update',
+      module: 'users',
+      description: '修改密码',
+      username: username,
+      status: 'success',
+      details: {
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      }
+    });
+
+    res.json({ message: '密码修改成功' });
+  } catch (err) {
+    // 记录错误
+    logger.logOperation({
+      type: 'update',
+      module: 'users',
+      description: '修改密码失败',
+      username: req.user.username,
+      status: 'error',
+      details: {
+        error: err.message,
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      }
+    });
+    next(err);
+  }
+});
+
 module.exports = router; 
