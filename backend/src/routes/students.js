@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const ExcelJS = require('exceljs');
 const { run, get } = require('../models/database');
 const { logger } = require('../utils/logger');
 const { authenticateToken } = require('../middleware/auth');
@@ -20,16 +21,25 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (extname && mimetype) {
-      return cb(null, true);
+    if (file.fieldname === 'photo') {
+      const allowedTypes = /jpeg|jpg|png/;
+      const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+      const mimetype = allowedTypes.test(file.mimetype);
+      if (extname && mimetype) {
+        return cb(null, true);
+      }
+      cb(new Error('只允许上传jpg/jpeg/png格式的图片！'));
+    } else if (file.fieldname === 'file') {
+      const allowedTypes = /xlsx|xls/;
+      const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+      if (extname) {
+        return cb(null, true);
+      }
+      cb(new Error('只允许上传Excel文件！'));
     }
-    cb(new Error('只允许上传jpg/jpeg/png格式的图片！'));
-  }
+  },
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
 });
 
 // 下载Excel导入模板
@@ -203,6 +213,99 @@ router.delete('/:id', authenticateToken, async (req, res, next) => {
       }
     });
     res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 导入学生
+router.post('/import', authenticateToken, upload.single('file'), async (req, res, next) => {
+  if (!req.file) {
+    return res.status(400).json({ message: '请上传Excel文件' });
+  }
+
+  try {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(req.file.path);
+    const worksheet = workbook.getWorksheet(1);
+    
+    const students = [];
+    const errors = [];
+    
+    // 从第二行开始读取（跳过表头）
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // 跳过表头
+      
+      const student = {
+        name: row.getCell(1).value,
+        student_id: row.getCell(2).value,
+        grade: row.getCell(3).value,
+        class: row.getCell(4).value,
+        address: row.getCell(5).value,
+        emergency_contact: row.getCell(6).value,
+        emergency_phone: row.getCell(7).value,
+        notes: row.getCell(8).value
+      };
+      
+      // 验证必填字段
+      if (!student.name || !student.student_id || !student.grade || !student.class) {
+        errors.push(`第${rowNumber}行：姓名、学号、年级、班级为必填项`);
+        return;
+      }
+      
+      // 验证年级
+      if (!['高一', '高二', '高三'].includes(student.grade)) {
+        errors.push(`第${rowNumber}行：年级只能是高一、高二、高三`);
+        return;
+      }
+      
+      students.push(student);
+    });
+    
+    // 如果有错误，返回错误信息
+    if (errors.length > 0) {
+      return res.status(400).json({ 
+        message: '导入数据有误',
+        errors 
+      });
+    }
+    
+    // 开始导入数据
+    for (const student of students) {
+      try {
+        // 检查学号是否已存在
+        const [existingStudent] = await get('SELECT * FROM students WHERE student_id = ?', [student.student_id]);
+        if (existingStudent) {
+          errors.push(`学号${student.student_id}已存在`);
+          continue;
+        }
+        
+        await run(
+          `INSERT INTO students (name, student_id, grade, class, address, emergency_contact, emergency_phone, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [student.name, student.student_id, student.grade, student.class, student.address, student.emergency_contact, student.emergency_phone, student.notes]
+        );
+        
+        // 记录操作日志
+        await logger.logOperation({
+          type: 'create',
+          module: 'students',
+          description: `导入学生: ${student.name}`,
+          username: req.user.username,
+          ip: req.ip,
+          details: student
+        });
+      } catch (err) {
+        errors.push(`导入学生${student.name}（${student.student_id}）失败: ${err.message}`);
+      }
+    }
+    
+    res.json({
+      message: '导入完成',
+      total: students.length,
+      success: students.length - errors.length,
+      errors: errors.length > 0 ? errors : undefined
+    });
   } catch (err) {
     next(err);
   }
