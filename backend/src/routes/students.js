@@ -86,12 +86,12 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
   console.log('----req.ip----',req.ip);
   console.log('----req.body----',req.body);
   try {
-    const { name, student_id, grade, class: className, address, emergency_contact, emergency_phone, notes,photo_url } = req.body;
+    const { name, student_id, grade, class: className, teacher, address, emergency_contact, emergency_phone, notes, photo_url } = req.body;
 
     const result = await run(
-      `INSERT INTO students (name, student_id, grade, class, photo_url, address, emergency_contact, emergency_phone, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, student_id, grade, className, photo_url, address, emergency_contact, emergency_phone, notes]
+      `INSERT INTO students (name, student_id, grade, class, teacher, photo_url, address, emergency_contact, emergency_phone, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, student_id, grade, className, teacher, photo_url, address, emergency_contact, emergency_phone, notes]
     );
 
     logger.logOperation({
@@ -106,6 +106,7 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
         student_id,
         grade,
         class: className,
+        teacher,
         photo_url,
         address,
         emergency_contact,
@@ -113,7 +114,6 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
         notes
       }
     });
-   
 
     res.status(201).json({
       id: result.lastID,
@@ -121,6 +121,7 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
       student_id,
       grade,
       class: className,
+      teacher,
       photo_url,
       address,
       emergency_contact,
@@ -136,62 +137,29 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
 // 更新学生
 router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, next) => {
   try {
-    const { name, student_id, grade, class: className, address, emergency_contact, emergency_phone, notes, photo_url: existingPhotoUrl } = req.body;
+    const { name, student_id, grade, class: className, teacher, address, emergency_contact, emergency_phone, notes, photo_url } = req.body;
     
-    // 如果上传了新图片，使用新图片的URL；否则保留原有的URL
-    const photo_url = req.file ? `/uploads/students/${req.file.filename}` : existingPhotoUrl;
-    logger.logOperation({
-      type: 'upadate',
-      module: 'students',
-      description: `更新学生: ${name}`,
-      status: 'success',  
-      username: req.user.username,
-      ip: req.ip,
-      details: {
-        name,
-        student_id,
-        grade,
-        class: className,
-        photo_url,
-        address,
-        emergency_contact,
-        emergency_phone,
-        notes
-      }
-    });
-
-    let updateFields = [];
-    let params = [];
-
-    const fields = {
-      name, 
-      student_id, 
-      grade, 
-      class: className, 
-      address, 
-      emergency_contact, 
-      emergency_phone, 
-      notes,
-      photo_url  // 添加photo_url到更新字段中
-    };
-
-    for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updateFields.push(`${key} = ?`);
-        params.push(value);
-      }
-    }
-
-    params.push(req.params.id);
-
-
     await run(
-      `UPDATE students SET ${updateFields.join(', ')} WHERE id = ?`,
-      params
+      `UPDATE students 
+       SET name = ?, student_id = ?, grade = ?, class = ?, teacher = ?, photo_url = ?, 
+           address = ?, emergency_contact = ?, emergency_phone = ?, notes = ?
+       WHERE id = ?`,
+      [name, student_id, grade, className, teacher, photo_url, address, emergency_contact, emergency_phone, notes, req.params.id]
     );
 
-    const [updatedStudent] = await get('SELECT * FROM students WHERE id = ?', [req.params.id]);
-    res.json(updatedStudent);
+    res.json({
+      id: parseInt(req.params.id),
+      name,
+      student_id,
+      grade,
+      class: className,
+      teacher,
+      photo_url,
+      address,
+      emergency_contact,
+      emergency_phone,
+      notes
+    });
   } catch (err) {
     next(err);
   }
@@ -241,15 +209,16 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         student_id: row.getCell(2).value,
         grade: row.getCell(3).value,
         class: row.getCell(4).value,
-        address: row.getCell(5).value,
-        emergency_contact: row.getCell(6).value,
-        emergency_phone: row.getCell(7).value,
-        notes: row.getCell(8).value
+        teacher: row.getCell(5).value,
+        address: row.getCell(6).value,
+        emergency_contact: row.getCell(7).value,
+        emergency_phone: row.getCell(8).value,
+        notes: row.getCell(9).value
       };
       
       // 验证必填字段
-      if (!student.name || !student.student_id || !student.grade || !student.class) {
-        errors.push(`第${rowNumber}行：姓名、学号、年级、班级为必填项`);
+      if (!student.name || !student.student_id || !student.grade || !student.class || !student.teacher) {
+        errors.push(`第${rowNumber}行：姓名、学号、年级、班级、班主任为必填项`);
         return;
       }
       
@@ -281,9 +250,9 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         }
         
         await run(
-          `INSERT INTO students (name, student_id, grade, class, address, emergency_contact, emergency_phone, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [student.name, student.student_id, student.grade, student.class, student.address, student.emergency_contact, student.emergency_phone, student.notes]
+          `INSERT INTO students (name, student_id, grade, class, teacher, address, emergency_contact, emergency_phone, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [student.name, student.student_id, student.grade, student.class, student.teacher, student.address, student.emergency_contact, student.emergency_phone, student.notes]
         );
         
         // 记录操作日志

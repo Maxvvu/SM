@@ -99,6 +99,17 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="teacher" label="班主任" sortable="custom">
+          <template #default="scope">
+            <el-tag
+              type="info"
+              size="small"
+              effect="plain"
+            >
+              {{ scope.row.teacher || '-' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="照片" width="100">
           <template #default="scope">
             <div class="image-container">
@@ -218,6 +229,14 @@
           </el-col>
         </el-row>
 
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="班主任" prop="teacher">
+              <el-input v-model="form.teacher" placeholder="请输入班主任姓名" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
         <el-form-item label="照片">
           <el-upload
             class="avatar-uploader"
@@ -291,6 +310,7 @@ const form = ref({
   student_id: '',
   class: '',
   grade: '',
+  teacher: '',
   photo_url: '',
   address: '',
   emergency_contact: '',
@@ -338,6 +358,10 @@ const rules = {
       },
       trigger: 'blur'
     }
+  ],
+  teacher: [
+    { required: true, message: '请输入班主任姓名', trigger: 'blur' },
+    { min: 2, max: 20, message: '长度在 2 到 20 个字符', trigger: 'blur' }
   ],
   emergency_phone: [
     { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', trigger: 'blur' }
@@ -470,6 +494,7 @@ const handleAdd = () => {
     student_id: '',
     class: '',
     grade: '',
+    teacher: '',
     photo_url: '',
     address: '',
     emergency_contact: '',
@@ -608,6 +633,7 @@ const handleSubmit = async () => {
       student_id: form.value.student_id?.trim() || '',
       grade: form.value.grade || '',
       class: classValue,  // 使用处理后的班级值
+      teacher: form.value.teacher?.trim() || '',
       photo_url: form.value.photo_url || '',
       address: form.value.address?.trim() || '',
       emergency_contact: form.value.emergency_contact?.trim() || '',
@@ -665,6 +691,7 @@ const handleSubmit = async () => {
         student_id: '',
         class: '',
         grade: '',
+        teacher: '',
         photo_url: '',
         address: '',
         emergency_contact: '',
