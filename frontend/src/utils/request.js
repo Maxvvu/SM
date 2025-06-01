@@ -5,7 +5,7 @@ import { useUserStore } from '../stores/user'
 
 // 创建axios实例
 const request = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
   timeout: 15000,
   withCredentials: true // 允许跨域请求携带凭证
 })

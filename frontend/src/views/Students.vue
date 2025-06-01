@@ -218,15 +218,11 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="年级" prop="grade">
-              <el-input
-                v-model="form.gradeYear"
-                placeholder="请输入年份"
-                @input="handleGradeInput"
-                type="number"
-                :min="2022"
-              >
-                <template #append>级</template>
-              </el-input>
+              <el-select v-model="form.grade" placeholder="请选择年级" style="width: 100%">
+                <el-option label="高一" value="高一" />
+                <el-option label="高二" value="高二" />
+                <el-option label="高三" value="高三" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -324,15 +320,11 @@
           v-if="selectedFields.includes('grade')"
           label="年级"
         >
-          <el-input
-            v-model="batchForm.gradeYear"
-            placeholder="请输入年份"
-            @input="handleBatchGradeInput"
-            type="number"
-            :min="2022"
-          >
-            <template #append>级</template>
-          </el-input>
+          <el-select v-model="batchForm.grade" placeholder="请选择年级" style="width: 100%">
+            <el-option label="高一" value="高一" />
+            <el-option label="高二" value="高二" />
+            <el-option label="高三" value="高三" />
+          </el-select>
         </el-form-item>
 
         <!-- 班级字段 -->
@@ -420,20 +412,15 @@ const rules = {
     { pattern: /^[A-Za-z0-9]+$/, message: '学号只能包含字母和数字', trigger: 'blur' }
   ],
   grade: [
-    { required: true, message: '请输入年级', trigger: 'change' },
+    { required: true, message: '请选择年级', trigger: 'change' },
     {
       validator: (rule, value, callback) => {
         if (!value) {
-          callback(new Error('请输入年级'))
-        } else if (!/^\d{4}级$/.test(value)) {
-          callback(new Error('年级格式不正确'))
+          callback(new Error('请选择年级'))
+        } else if (!['高一', '高二', '高三'].includes(value)) {
+          callback(new Error('请选择正确的年级'))
         } else {
-          const year = parseInt(value)
-          if (year < 2022) {
-            callback(new Error('年级不能早于2022年'))
-          } else {
-            callback()
-          }
+          callback()
         }
       },
       trigger: 'change'
@@ -477,20 +464,7 @@ const rules = {
 
 // 修改grades计算属性（用于过滤选项）
 const grades = computed(() => {
-  // 从现有学生数据中提取所有年级
-  const gradeSet = new Set();
-  students.value.forEach(student => {
-    if (student.grade && /^\d{4}级$/.test(student.grade)) {
-      gradeSet.add(student.grade);
-    }
-  });
-  
-  // 转换为数组并按年份排序（降序，最新的年级在前）
-  return Array.from(gradeSet).sort((a, b) => {
-    const yearA = parseInt(a);
-    const yearB = parseInt(b);
-    return yearB - yearA;
-  });
+  return ['高一', '高二', '高三'];
 })
 
 // 获取可用的班级列表
@@ -517,35 +491,16 @@ const availableClasses = computed(() => {
 
 // 根据年级获取标签类型
 const getGradeTagType = (grade) => {
-  if (!grade || !/^\d{4}级$/.test(grade)) {
-    return '';  // 使用默认颜色
+  switch (grade) {
+    case '高一':
+      return 'success';
+    case '高二':
+      return 'warning';
+    case '高三':
+      return 'danger';
+    default:
+      return '';
   }
-  
-  const year = parseInt(grade);
-  const currentYear = new Date().getFullYear();
-  const yearDiff = year - currentYear;
-  
-  // 定义自定义颜色类型
-  const customTypes = {
-    'success-elegant': 'success',    // 翡翠绿
-    'warning-soft': 'warning',       // 温暖金
-    'primary-bright': 'primary',     // 天空蓝
-    'danger-light': 'danger',        // 珊瑚红
-    'info-calm': 'info',            // 薄雾蓝
-    'default-neutral': ''           // 优雅灰
-  };
-  
-  // 根据年份差值循环使用颜色
-  const colorKeys = Object.keys(customTypes);
-  const colorIndex = Math.abs(yearDiff) % colorKeys.length;
-  
-  // 当前年级和未来年级使用正向顺序
-  if (yearDiff >= 0) {
-    return customTypes[colorKeys[colorIndex]];
-  }
-  
-  // 历史年级使用反向顺序
-  return customTypes[colorKeys[colorKeys.length - 1 - colorIndex]];
 }
 
 // 添加分页相关的响应式变量
@@ -925,14 +880,7 @@ const handleBatchDelete = () => {
 
 // 修改年级输入处理函数
 const handleGradeInput = (value) => {
-  if (value) {
-    const year = parseInt(value)
-    if (year >= 2022) {
-      form.value.grade = `${year}级`
-    }
-  } else {
-    form.value.grade = ''
-  }
+  form.value.grade = value;
 }
 
 // 添加批量编辑相关的响应式变量

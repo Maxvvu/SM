@@ -32,7 +32,7 @@ async function createStudentTemplate() {
   worksheet.addRow({
     name: '张三（示例）',
     student_id: 'S001',
-    grade: '2025级',
+    grade: '高一',
     class: '1班',
     teacher: '李老师',
     address: '北京市海淀区XX街XX号',
@@ -41,13 +41,8 @@ async function createStudentTemplate() {
     notes: '这是一条示例数据'
   });
 
-  // 计算未来三年的年级选项
-  const currentYear = new Date().getFullYear();
-  const gradeOptions = [
-    `${currentYear + 3}级`,
-    `${currentYear + 2}级`,
-    `${currentYear + 1}级`
-  ].join(',');
+  // 设置年级选项
+  const gradeOptions = ['高一', '高二', '高三'].join(',');
 
   // 设置每列的数据验证
   worksheet.dataValidations.add('C2:C1000', {

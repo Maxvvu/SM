@@ -16,7 +16,7 @@ const { logger } = require('./utils/logger');
 const { ensureUploadDirectories } = require('./utils/init');
 
 const app = express();
-const port = 3000;
+const port = 3001;
 
 // 确保上传目录存在
 ensureUploadDirectories();

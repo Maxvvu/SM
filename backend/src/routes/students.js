@@ -88,6 +88,11 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
   try {
     const { name, student_id, grade, class: className, teacher, address, emergency_contact, emergency_phone, notes, photo_url } = req.body;
 
+    // 验证年级
+    if (!['高一', '高二', '高三'].includes(grade)) {
+      return res.status(400).json({ message: '无效的年级' });
+    }
+
     const result = await run(
       `INSERT INTO students (name, student_id, grade, class, teacher, photo_url, address, emergency_contact, emergency_phone, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -143,6 +148,11 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
     const [currentStudent] = await get('SELECT * FROM students WHERE id = ?', [req.params.id]);
     if (!currentStudent) {
       return res.status(404).json({ message: '未找到该学生' });
+    }
+
+    // 验证年级
+    if (grade && !['高一', '高二', '高三'].includes(grade)) {
+      return res.status(400).json({ message: '无效的年级' });
     }
 
     // 构建更新字段
