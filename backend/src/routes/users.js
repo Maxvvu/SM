@@ -76,7 +76,7 @@ router.post('/', authenticateToken, isAdmin, async (req, res, next) => {
 router.put('/:id', authenticateToken, isAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { username, role } = req.body;
+    const { username, role, newPassword } = req.body;
 
     // 检查用户是否存在
     const [user] = await get('SELECT * FROM users WHERE id = ?', [id]);
@@ -92,10 +92,40 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res, next) => {
       }
     }
 
-    await run(
-      'UPDATE users SET username = ?, role = ? WHERE id = ?',
-      [username, role, id]
-    );
+    // 构建更新SQL
+    let sql = 'UPDATE users SET username = ?, role = ?';
+    let params = [username, role];
+
+    // 如果提供了新密码，更新密码
+    if (newPassword) {
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      sql += ', password = ?';
+      params.push(hashedPassword);
+    }
+
+    // 添加WHERE条件
+    sql += ' WHERE id = ?';
+    params.push(id);
+
+    // 执行更新
+    await run(sql, params);
+
+    // 记录操作日志
+    logger.logOperation({
+      type: 'update',
+      module: 'users',
+      description: '更新用户信息',
+      username: req.user.username,
+      status: 'success',
+      details: {
+        updatedUser: username,
+        updatedFields: {
+          username: username !== user.username,
+          role: role !== user.role,
+          password: !!newPassword
+        }
+      }
+    });
 
     res.json({
       id: parseInt(id),
@@ -104,6 +134,17 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res, next) => {
       status: user.status === 0 ? 'inactive' : 'active'
     });
   } catch (err) {
+    logger.logOperation({
+      type: 'update',
+      module: 'users',
+      description: '更新用户失败',
+      username: req.user.username,
+      status: 'error',
+      details: {
+        error: err.message,
+        userId: req.params.id
+      }
+    });
     next(err);
   }
 });

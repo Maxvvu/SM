@@ -78,10 +78,7 @@
         style="max-width: 460px"
       >
         <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" />
-        </el-form-item>
-        <el-form-item label="密码" prop="password" v-if="dialogType === 'add'">
-          <el-input v-model="form.password" type="password" />
+          <el-input v-model="form.username" :disabled="dialogType === 'edit'" />
         </el-form-item>
         <el-form-item label="角色" prop="role">
           <el-select v-model="form.role" style="width: 100%">
@@ -89,11 +86,41 @@
             <el-option label="普通用户" value="user" />
           </el-select>
         </el-form-item>
+        <el-form-item 
+          label="密码" 
+          prop="password"
+          v-if="dialogType === 'add'"
+        >
+          <el-input v-model="form.password" type="password" show-password />
+        </el-form-item>
+        
+        <!-- 修改密码部分 -->
+        <div v-if="dialogType === 'edit'" class="password-section">
+          <el-divider>修改密码（可选）</el-divider>
+          <el-form-item label="新密码" prop="newPassword">
+            <el-input 
+              v-model="form.newPassword" 
+              type="password" 
+              show-password
+              placeholder="不修改请留空"
+            />
+          </el-form-item>
+          <el-form-item label="确认密码" prop="confirmPassword">
+            <el-input 
+              v-model="form.confirmPassword" 
+              type="password" 
+              show-password
+              placeholder="不修改请留空"
+            />
+          </el-form-item>
+        </div>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSubmit">确定</el-button>
+          <el-button type="primary" @click="handleSubmit" :loading="loading">
+            确定
+          </el-button>
         </span>
       </template>
     </el-dialog>
@@ -112,9 +139,12 @@ const dialogType = ref('add')
 const formRef = ref(null)
 
 const form = ref({
+  id: '',
   username: '',
   password: '',
-  role: 'user'
+  role: 'user',
+  newPassword: '',
+  confirmPassword: ''
 })
 
 const rules = {
@@ -123,10 +153,34 @@ const rules = {
     { min: 3, max: 20, message: '长度在 3 到 20 个字符', trigger: 'blur' }
   ],
   password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
+    { required: true, message: '请输入密码', trigger: 'blur', validator: (rule, value, callback) => {
+      if (dialogType.value === 'add' && !value) {
+        callback(new Error('请输入密码'))
+      } else {
+        callback()
+      }
+    }},
     { min: 6, max: 20, message: '长度在 6 到 20 个字符', trigger: 'blur' }
   ],
-  role: [{ required: true, message: '请选择角色', trigger: 'change' }]
+  role: [{ required: true, message: '请选择角色', trigger: 'change' }],
+  newPassword: [
+    { validator: (rule, value, callback) => {
+      if (value && value.length < 6) {
+        callback(new Error('密码长度不能小于6个字符'))
+      } else {
+        callback()
+      }
+    }, trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { validator: (rule, value, callback) => {
+      if (form.value.newPassword && value !== form.value.newPassword) {
+        callback(new Error('两次输入密码不一致'))
+      } else {
+        callback()
+      }
+    }, trigger: 'blur' }
+  ]
 }
 
 const fetchUsers = async () => {
@@ -164,9 +218,12 @@ const handleAdd = () => {
   console.log('=== 开始添加用户 ===')
   dialogType.value = 'add'
   form.value = {
+    id: '',
     username: '',
     password: '',
-    role: 'user'
+    role: 'user',
+    newPassword: '',
+    confirmPassword: ''
   }
   console.log('重置表单数据:', form.value)
   dialogVisible.value = true
@@ -179,7 +236,10 @@ const handleEdit = (row) => {
   form.value = {
     id: row.id,
     username: row.username,
-    role: row.role
+    role: row.role,
+    password: '',
+    newPassword: '',
+    confirmPassword: ''
   }
   console.log('表单已填充数据:', form.value)
   dialogVisible.value = true
@@ -202,17 +262,26 @@ const handleSubmit = async () => {
     if (valid) {
       try {
         let response
+        const formData = {
+          username: form.value.username,
+          role: form.value.role
+        }
+
         if (dialogType.value === 'add') {
-          console.log('发送添加用户请求:', form.value)
-          response = await request.post('/api/users', form.value)
+          formData.password = form.value.password
+          console.log('发送添加用户请求:', formData)
+          response = await request.post('/api/users', formData)
           console.log('添加用户响应:', response)
           ElMessage.success('添加用户成功')
         } else {
+          if (form.value.newPassword) {
+            formData.newPassword = form.value.newPassword
+          }
           console.log('发送更新用户请求:', {
             id: form.value.id,
-            data: form.value
+            data: formData
           })
-          response = await request.put(`/api/users/${form.value.id}`, form.value)
+          response = await request.put(`/api/users/${form.value.id}`, formData)
           console.log('更新用户响应:', response)
           ElMessage.success('更新用户成功')
         }
@@ -225,7 +294,7 @@ const handleSubmit = async () => {
           response: error.response?.data,
           status: error.response?.status
         })
-        ElMessage.error(dialogType.value === 'add' ? '添加用户失败' : '更新用户失败')
+        ElMessage.error(error.response?.data?.message || (dialogType.value === 'add' ? '添加用户失败' : '更新用户失败'))
       }
     }
   } catch (error) {
@@ -316,5 +385,13 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.password-section {
+  margin-top: 20px;
+}
+
+.el-divider {
+  margin: 16px 0;
 }
 </style> 

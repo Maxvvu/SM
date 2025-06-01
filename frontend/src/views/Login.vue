@@ -38,7 +38,7 @@
 
         <div class="form-footer">
           <el-checkbox v-model="rememberMe">记住我</el-checkbox>
-          <el-link type="primary" :underline="false">忘记密码？</el-link>
+          <el-link type="primary" :underline="false" @click="handleForgotPassword">忘记密码？</el-link>
         </div>
         
         <el-form-item>
@@ -77,7 +77,7 @@
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, Lock, School, ChromeFilled } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -144,6 +144,14 @@ const handleLogin = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleForgotPassword = () => {
+  ElMessageBox.alert('请联系管理员重置密码', '忘记密码', {
+    confirmButtonText: '确定',
+    type: 'info',
+    center: true
+  })
 }
 </script>
 
