@@ -43,11 +43,6 @@ router.post('/', authenticateToken, upload.single('file'), async (req, res) => {
     const type = req.query.type || 'general';
     const fileUrl = `/uploads/${type}/${req.file.filename}`;
 
-    logger.info('文件上传成功:', { 
-      originalName: req.file.originalname,
-      type: type,
-      url: fileUrl 
-    });
 
     res.json({
       url: fileUrl,
@@ -55,7 +50,6 @@ router.post('/', authenticateToken, upload.single('file'), async (req, res) => {
       size: req.file.size
     });
   } catch (err) {
-    logger.error('文件上传错误:', err);
     res.status(500).json({ message: '文件上传失败' });
   }
 });

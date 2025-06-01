@@ -12,7 +12,6 @@ async function main() {
     
     process.exit(0);
   } catch (err) {
-    logger.error('生成测试数据失败:', err);
     process.exit(1);
   }
 }

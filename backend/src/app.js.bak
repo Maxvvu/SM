@@ -48,10 +48,10 @@ app.use(errorHandler);
 initDatabase()
   .then(() => {
     app.listen(port, () => {
-      logger.info(`服务器运行在 http://localhost:${port}`);
+
     });
   })
   .catch(err => {
-    logger.error('服务器启动失败:', err);
+
     process.exit(1);
   }); 

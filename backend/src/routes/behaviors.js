@@ -129,15 +129,29 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 // 创建行为记录
 router.post('/', authenticateToken, upload.single('image'), async (req, res, next) => {
   try {
-    const { student_id, behavior_type, description } = req.body;
-    const image_url = req.file ? `/uploads/behaviors/${req.file.filename}` : null;
+    const { student_id, behavior_type, description ,image_url} = req.body;
+    
+     
 
     // 验证行为类型是否存在
     const [type] = await get('SELECT * FROM behavior_types WHERE name = ?', [behavior_type]);
     if (!type) {
       return res.status(400).json({ message: '无效的行为类型' });
     }
-
+    logger.logOperation({
+      type: 'create',
+      module: 'behaviors',
+      description: `创建行为记录`,
+      status: 'success',  
+      username: req.user.username,
+      ip: req.ip,
+      details: {
+        student_id,
+        behavior_type,
+        description,
+        image_url
+      }
+    });
     // 验证学生是否存在
     const [student] = await get('SELECT * FROM students WHERE id = ?', [student_id]);
     if (!student) {
@@ -178,7 +192,20 @@ router.put('/:id', authenticateToken, upload.single('image'), async (req, res, n
       description,
       image_url
     };
-
+    logger.logOperation({
+      type: 'upadate',
+      module: 'behaviors',
+      description: `更新行为记录`,
+      status: 'success',  
+      username: req.user.username,
+      ip: req.ip,
+      details: {
+        student_id,
+        behavior_type,
+        description,
+        image_url
+      }
+    });
     for (const [key, value] of Object.entries(fields)) {
       if (value !== undefined) {
         updateFields.push(`${key} = ?`);
@@ -212,10 +239,22 @@ router.put('/:id', authenticateToken, upload.single('image'), async (req, res, n
 router.delete('/:id', authenticateToken, async (req, res, next) => {
   try {
     await run('DELETE FROM behaviors WHERE id = ?', [req.params.id]);
+    logger.logOperation({
+      type: 'delete',
+      module: 'behaviors',
+      description: `删除行为记录`,
+      status: 'success',  
+      username: req.user.username,
+      ip: req.ip,
+      details: {
+        id: req.params.id,
+      }
+    });
     res.status(204).send();
   } catch (err) {
     next(err);
   }
 });
+
 
 module.exports = router; 

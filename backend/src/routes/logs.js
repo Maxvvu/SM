@@ -1,1 +1,94 @@
-const express = require("express"); const router = express.Router(); const { authenticateToken, isAdmin } = require("../middleware/auth"); const { get, run } = require("../models/database"); router.get("/", authenticateToken, isAdmin, async (req, res) => { try { const { page = 1, pageSize = 20, type, startDate, endDate } = req.query; const skip = (parseInt(page) - 1) * parseInt(pageSize); const limit = parseInt(pageSize); let sql = "SELECT * FROM operation_logs WHERE 1=1"; const params = []; if (type) { sql += " AND type = ?"; params.push(type); } if (startDate && endDate) { sql += " AND timestamp BETWEEN ? AND ?"; params.push(startDate, endDate); } sql += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"; params.push(limit, skip); const countSql = sql.replace("SELECT *", "SELECT COUNT(*) as total").split("ORDER BY")[0]; const [logs, [totalResult]] = await Promise.all([ get(sql, params), get(countSql, params.slice(0, -2)) ]); res.json({ logs, total: totalResult.total, page: parseInt(page), pageSize: parseInt(pageSize) }); } catch (error) { console.error("获取操作日志失败:", error); res.status(500).json({ message: "获取操作日志失败" }); } }); router.post("/", authenticateToken, async (req, res) => { try { const { type, module, description, status = "success" } = req.body; const result = await run("INSERT INTO operation_logs (username, type, module, description, status, ip) VALUES (?, ?, ?, ?, ?, ?)", [req.user.username, type, module, description, status, req.ip]); res.status(201).json({ id: result.lastID }); } catch (error) { console.error("添加操作日志失败:", error); res.status(500).json({ message: "添加操作日志失败" }); } }); module.exports = router;
+const express = require("express");
+const { authenticateToken, isAdmin } = require("../middleware/auth");
+const { logger } = require("../utils/logger");
+
+const router = express.Router();
+
+// 获取操作日志
+router.get("/", authenticateToken, isAdmin, async (req, res, next) => {
+  try {
+
+    const { page = 1, pageSize = 10, type, startDate, endDate } = req.query;
+    
+    const result = await logger.getOperationLogs({
+      page: parseInt(page),
+      pageSize: parseInt(pageSize),
+      type,
+      startDate,
+      endDate
+    });
+
+    res.json(result);
+  } catch (err) {
+
+    next(err);
+  }
+});
+
+// 批量删除日志
+router.delete("/batch", authenticateToken, isAdmin, async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "请选择要删除的日志" });
+    }
+
+    const result = await logger.deleteOperationLogs(ids);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 清除日志
+router.delete("/", authenticateToken, isAdmin, async (req, res, next) => {
+  try {
+    const { type } = req.query;
+
+    const logPath = path.join(__dirname, "../../logs/combined.log");
+    const errorLogPath = path.join(__dirname, "../../logs/error.log");
+
+    if (!type || type === "all") {
+      // 清除所有日志
+      await ensureFileExists(logPath);
+      await ensureFileExists(errorLogPath);
+      await fs.writeFile(logPath, "");
+      await fs.writeFile(errorLogPath, "");
+    } else if (type === "error") {
+      // 只清除错误日志
+      await ensureFileExists(errorLogPath);
+      await fs.writeFile(errorLogPath, "");
+    } else if (type === "info") {
+      // 只清除普通日志
+      await ensureFileExists(logPath);
+      await fs.writeFile(logPath, "");
+    }
+
+    res.json({ message: "日志清除成功" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 辅助函数：检查文件是否存在
+async function fileExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// 辅助函数：确保文件存在
+async function ensureFileExists(filePath) {
+  try {
+    await fs.access(filePath);
+  } catch {
+    // 如果文件不存在，创建一个空文件
+    await fs.writeFile(filePath, "");
+  }
+}
+
+module.exports = router;

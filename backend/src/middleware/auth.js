@@ -14,7 +14,7 @@ const authenticateToken = (req, res, next) => {
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      logger.error('Token验证失败:', err);
+ 
       return res.status(403).json({ message: '无效的认证令牌' });
     }
 

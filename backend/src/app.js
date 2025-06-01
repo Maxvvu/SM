@@ -10,6 +10,7 @@ const behaviorRoutes = require('./routes/behaviors');
 const behaviorTypeRoutes = require('./routes/behaviorTypes');
 const statisticsRoutes = require('./routes/statistics');
 const uploadRoutes = require('./routes/upload');
+const logsRoutes =require('./routes/logs')
 const { errorHandler } = require('./middleware/errorHandler');
 const { logger } = require('./utils/logger');
 const { ensureUploadDirectories } = require('./utils/init');
@@ -40,6 +41,7 @@ app.use('/api/behaviors', behaviorRoutes);
 app.use('/api/behaviorTypes', behaviorTypeRoutes);
 app.use('/api/statistics', statisticsRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/logs', logsRoutes);
 
 // 错误处理中间件
 app.use(errorHandler);
@@ -48,10 +50,10 @@ app.use(errorHandler);
 initDatabase()
   .then(() => {
     app.listen(port, () => {
-      logger.info(`服务器运行在 http://localhost:${port}`);
+
     });
   })
   .catch(err => {
-    logger.error('服务器启动失败:', err);
+
     process.exit(1);
   }); 

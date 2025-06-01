@@ -90,13 +90,10 @@ async function generateTestStudents(count = 100) {
       );
 
       if (i % 10 === 0) {
-        logger.info(`已生成 ${i + 1} 条测试数据`);
       }
     }
     
-    logger.info(`成功生成 ${count} 条测试数据`);
   } catch (err) {
-    logger.error('生成测试数据失败:', err);
     throw err;
   }
 }
@@ -172,13 +169,10 @@ async function generateTestBehaviors(count = 100) {
       );
 
       if (i % 10 === 0) {
-        logger.info(`已生成 ${i + 1} 条行为记录测试数据`);
       }
     }
     
-    logger.info(`成功生成 ${count} 条行为记录测试数据`);
   } catch (err) {
-    logger.error('生成行为记录测试数据失败:', err);
     throw err;
   }
 }

@@ -9,7 +9,7 @@ async function insertMockBehaviors() {
     const studentIds = students.map(student => student.id);
 
     if (studentIds.length === 0) {
-      logger.error('没有找到任何学生记录，请先添加学生数据');
+
       process.exit(1);
     }
 
@@ -26,7 +26,7 @@ async function insertMockBehaviors() {
           [type.name, type.category]
         );
       } catch (err) {
-        logger.error(`添加行为类型失败: ${type.name}`, err);
+
       }
     }
 
@@ -47,21 +47,17 @@ async function insertMockBehaviors() {
         successCount++;
         
         if (successCount % 10 === 0) {
-          logger.info(`已成功插入 ${successCount} 条违纪记录`);
+
         }
       } catch (err) {
-        logger.error(`插入违纪记录失败:`, {
-          studentId: behavior.student_id,
-          type: behavior.behavior_type,
-          error: err.message
-        });
+
       }
     }
 
-    logger.info(`批量插入完成，共成功插入 ${successCount} 条违纪记录`);
+
     process.exit(0);
   } catch (err) {
-    logger.error('批量插入违纪记录时发生错误:', err);
+
     process.exit(1);
   }
 }

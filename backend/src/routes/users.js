@@ -21,7 +21,6 @@ router.get('/', authenticateToken, isAdmin, async (req, res, next) => {
     `);
     res.json(users);
   } catch (err) {
-    logger.error('获取用户列表失败:', err);
     next(err);
   }
 });
@@ -46,7 +45,6 @@ router.post('/', authenticateToken, isAdmin, async (req, res, next) => {
       [username, hashedPassword, role]
     );
 
-    logger.info('用户创建成功:', { username, role });
     res.status(201).json({ 
       id: result.lastID,
       username,
@@ -54,7 +52,6 @@ router.post('/', authenticateToken, isAdmin, async (req, res, next) => {
       status: 'active'
     });
   } catch (err) {
-    logger.error('创建用户失败:', err);
     next(err);
   }
 });
@@ -91,7 +88,6 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res, next) => {
       status: user.status === 0 ? 'inactive' : 'active'
     });
   } catch (err) {
-    logger.error('更新用户失败:', err);
     next(err);
   }
 });
@@ -126,7 +122,6 @@ router.patch('/:id/status', authenticateToken, isAdmin, async (req, res, next) =
       status
     });
   } catch (err) {
-    logger.error('更新用户状态失败:', err);
     next(err);
   }
 });
@@ -150,7 +145,6 @@ router.delete('/:id', authenticateToken, isAdmin, async (req, res, next) => {
     await run('DELETE FROM users WHERE id = ?', [id]);
     res.status(204).send();
   } catch (err) {
-    logger.error('删除用户失败:', err);
     next(err);
   }
 });

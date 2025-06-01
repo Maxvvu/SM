@@ -43,7 +43,6 @@ router.get('/template', authenticateToken, async (req, res, next) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
-    logger.error('生成Excel模板失败:', err);
     next(err);
   }
 });
@@ -73,15 +72,38 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 
 // 创建学生
 router.post('/', authenticateToken, upload.single('photo'), async (req, res, next) => {
+  console.log('----req.user----',req.user);
+  console.log('----req.ip----',req.ip);
+  console.log('----req.body----',req.body);
   try {
-    const { name, student_id, grade, class: className, address, emergency_contact, emergency_phone, notes } = req.body;
-    const photo_url = req.file ? `/uploads/students/${req.file.filename}` : null;
+    const { name, student_id, grade, class: className, address, emergency_contact, emergency_phone, notes,photo_url } = req.body;
 
     const result = await run(
       `INSERT INTO students (name, student_id, grade, class, photo_url, address, emergency_contact, emergency_phone, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [name, student_id, grade, className, photo_url, address, emergency_contact, emergency_phone, notes]
     );
+
+    logger.logOperation({
+      type: 'create',
+      module: 'students',
+      description: `创建学生: ${name}`,
+      status: 'success',  
+      username: req.user.username,
+      ip: req.ip,
+      details: {
+        name,
+        student_id,
+        grade,
+        class: className,
+        photo_url,
+        address,
+        emergency_contact,
+        emergency_phone,
+        notes
+      }
+    });
+   
 
     res.status(201).json({
       id: result.lastID,
@@ -96,6 +118,7 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
       notes
     });
   } catch (err) {
+    console.log('----err----',err);
     next(err);
   }
 });
@@ -107,6 +130,25 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
     
     // 如果上传了新图片，使用新图片的URL；否则保留原有的URL
     const photo_url = req.file ? `/uploads/students/${req.file.filename}` : existingPhotoUrl;
+    logger.logOperation({
+      type: 'upadate',
+      module: 'students',
+      description: `更新学生: ${name}`,
+      status: 'success',  
+      username: req.user.username,
+      ip: req.ip,
+      details: {
+        name,
+        student_id,
+        grade,
+        class: className,
+        photo_url,
+        address,
+        emergency_contact,
+        emergency_phone,
+        notes
+      }
+    });
 
     let updateFields = [];
     let params = [];
@@ -132,12 +174,6 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
 
     params.push(req.params.id);
 
-    // 记录更新操作
-    logger.info('更新学生信息:', {
-      studentId: req.params.id,
-      fields: updateFields,
-      photoUrl: photo_url
-    });
 
     await run(
       `UPDATE students SET ${updateFields.join(', ')} WHERE id = ?`,
@@ -147,7 +183,6 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
     const [updatedStudent] = await get('SELECT * FROM students WHERE id = ?', [req.params.id]);
     res.json(updatedStudent);
   } catch (err) {
-    logger.error('更新学生信息失败:', err);
     next(err);
   }
 });
@@ -156,6 +191,17 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
 router.delete('/:id', authenticateToken, async (req, res, next) => {
   try {
     await run('DELETE FROM students WHERE id = ?', [req.params.id]);
+    logger.logOperation({
+      type: 'delete',
+      module: 'students',
+      description: `删除学生`,
+      status: 'success',  
+      username: req.user.username,
+      ip: req.ip,
+      details: {
+        id: req.params.id,
+      }
+    });
     res.status(204).send();
   } catch (err) {
     next(err);

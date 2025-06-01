@@ -9,7 +9,6 @@ function ensureUploadDirectories() {
   // 确保基础上传目录存在
   if (!fs.existsSync(baseUploadPath)) {
     fs.mkdirSync(baseUploadPath, { recursive: true, mode: 0o755 });
-    logger.info(`创建基础上传目录: ${baseUploadPath}`);
   }
 
   // 确保各类型上传目录存在
@@ -17,7 +16,6 @@ function ensureUploadDirectories() {
     const typePath = path.join(baseUploadPath, type);
     if (!fs.existsSync(typePath)) {
       fs.mkdirSync(typePath, { recursive: true, mode: 0o755 });
-      logger.info(`创建上传目录: ${typePath}`);
     }
   });
 }

@@ -56,10 +56,10 @@
       <div class="login-footer">
         <p class="browser-tip">
           <el-icon><ChromeFilled /></el-icon>
-          推荐使用Chrome浏览器访问系统
+
         </p>
         <p class="copyright">
-          © {{ new Date().getFullYear() }} 学生行为管理系统 | 制作者：Max_Wu
+          © {{ new Date().getFullYear() }} 制作者：武晓玥
         </p>
       </div>
     </div>

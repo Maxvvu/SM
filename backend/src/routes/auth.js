@@ -5,21 +5,35 @@ const { get } = require('../models/database');
 const { logger } = require('../utils/logger');
 
 const router = express.Router();
-const JWT_SECRET = 'your-secret-key';  // 在生产环境中使用更安全的密钥
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 router.post('/login', async (req, res, next) => {
   try {
     const { username, password } = req.body;
-    logger.info('收到登录请求:', { username });
+    
+    // 记录登录尝试
+    logger.logOperation({
+      type: 'login',
+      module: 'auth',
+      description: '用户登录尝试',
+      username,
+      details: {
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      }
+    });
 
     if (!username || !password) {
+      logger.warn('登录失败: 用户名或密码为空', {
+        username,
+        ip: req.ip
+      });
       return res.status(400).json({ message: '用户名和密码不能为空' });
     }
 
     const [user] = await get('SELECT * FROM users WHERE username = ?', [username]);
     
     if (user) {
-      logger.info('找到用户:', { username: user.username, role: user.role });
       const isValidPassword = await bcrypt.compare(password, user.password);
 
       if (isValidPassword) {
@@ -37,15 +51,69 @@ router.post('/login', async (req, res, next) => {
           }
         };
 
-        logger.info('登录成功:', { username: user.username });
+        // 记录登录成功
+        logger.logOperation({
+          type: 'login',
+          module: 'auth',
+          description: '用户登录成功',
+          username: user.username,
+          status: 'success',
+          details: {
+            role: user.role,
+            ip: req.ip,
+            userAgent: req.headers['user-agent']
+          }
+        });
+        
+
         return res.json(response);
       }
     }
 
-    logger.warn('登录失败:', { username });
+    logger.logOperation({
+      type: 'login',
+      module: 'auth',
+      description: `用户登录失败`,
+      status: 'failure',  
+      username: req.body.username,
+      ip: req.ip,
+      details: {
+        username,
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      }
+    });
+    // 记录登录失败
+    logger.logOperation({
+      type: 'login',
+      module: 'auth',
+      description: '用户登录失败',
+      username,
+      status: 'failure',
+      details: {
+        reason: '用户名或密码错误',
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      }
+    });
+
     return res.status(401).json({ message: '用户名或密码错误' });
   } catch (err) {
-    logger.error('登录错误:', err);
+  
+
+    logger.logOperation({
+      type: 'login',
+      module: 'auth',
+      description: '登录过程发生错误',
+      username: req.body.username,
+      status: 'error',
+      details: {
+        error: err.message,
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      }
+    });
+
     next(err);
   }
 });
@@ -73,7 +141,6 @@ router.get('/verify-token', async (req, res, next) => {
 
     return res.status(401).json({ valid: false });
   } catch (err) {
-    logger.error('Token验证错误:', err);
     return res.status(401).json({ valid: false });
   }
 });

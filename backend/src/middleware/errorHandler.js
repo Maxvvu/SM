@@ -1,7 +1,6 @@
 const { logger } = require('../utils/logger');
 
 function errorHandler(err, req, res, next) {
-  logger.error('错误:', err);
 
   if (err.name === 'ValidationError') {
     return res.status(400).json({

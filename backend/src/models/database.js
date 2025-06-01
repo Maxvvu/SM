@@ -3,18 +3,20 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const { logger } = require('../utils/logger');
 
-const dbPath = path.join(__dirname, '../../database.sqlite');
+// 修改数据库路径
+const dbPath = path.join(__dirname, '../database.sqlite');
+
 let db;
 
 function getDatabase() {
   if (!db) {
-    logger.info('正在连接数据库:', dbPath);
+
     db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
-        logger.error('数据库连接失败:', err);
+
         throw err;
       }
-      logger.info('数据库连接成功');
+
     });
     db.run('PRAGMA foreign_keys = ON');
   }
@@ -25,7 +27,7 @@ async function initDatabase() {
   const db = getDatabase();
   
   try {
-    logger.info('开始初始化数据库...');
+
 
     // 创建users表
     await run(`
@@ -38,18 +40,34 @@ async function initDatabase() {
         last_login TIMESTAMP
       )
     `);
-    logger.info('users表创建成功');
+
+
+    // 创建operation_logs表
+    await run(`
+      CREATE TABLE IF NOT EXISTS operation_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        module TEXT NOT NULL,
+        description TEXT,
+        username TEXT NOT NULL,
+        status TEXT DEFAULT 'success',
+        details TEXT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (username) REFERENCES users(username)
+      )
+    `);
+ 
 
     // 检查是否需要插入管理员账户
     const [adminUser] = await get('SELECT * FROM users WHERE username = ?', ['admin']);
     if (!adminUser) {
-      logger.info('创建管理员账户...');
+
       const hashedPassword = await bcrypt.hash('admin123', 10);
       await run(
         'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
         ['admin', hashedPassword, 'admin']
       );
-      logger.info('管理员账户创建成功');
+  
     }
 
     // 创建students表
@@ -67,7 +85,7 @@ async function initDatabase() {
         notes TEXT
       )
     `);
-    logger.info('students表创建成功');
+
 
     // 创建behavior_types表
     await run(`
@@ -78,7 +96,7 @@ async function initDatabase() {
         description TEXT
       )
     `);
-    logger.info('behavior_types表创建成功');
+
 
     // 创建behaviors表
     await run(`
@@ -93,12 +111,12 @@ async function initDatabase() {
         FOREIGN KEY (behavior_type) REFERENCES behavior_types (name)
       )
     `);
-    logger.info('behaviors表创建成功');
+
 
     // 检查是否需要插入基本行为类型
     const [typeCount] = await get('SELECT COUNT(*) as count FROM behavior_types');
     if (typeCount.count === 0) {
-      logger.info('插入基本行为类型...');
+
       const basicTypes = [
         ['迟到', '违纪', '上课迟到'],
         ['早退', '违纪', '未经许可提前离开'],
@@ -114,12 +132,12 @@ async function initDatabase() {
           [name, category, description]
         );
       }
-      logger.info('基本行为类型插入完成');
+
     }
 
-    logger.info('数据库初始化完成');
+ 
   } catch (err) {
-    logger.error('数据库初始化失败:', err);
+
     throw err;
   }
 }
@@ -129,7 +147,6 @@ function run(sql, params = []) {
   return new Promise((resolve, reject) => {
     getDatabase().run(sql, params, function(err) {
       if (err) {
-        logger.error('SQL执行失败:', { sql, params, error: err });
         reject(err);
       } else {
         resolve(this);
@@ -143,7 +160,6 @@ function get(sql, params = []) {
   return new Promise((resolve, reject) => {
     getDatabase().all(sql, params, (err, rows) => {
       if (err) {
-        logger.error('SQL查询失败:', { sql, params, error: err });
         reject(err);
       } else {
         resolve(rows);

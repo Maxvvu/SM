@@ -1,16 +1,15 @@
 const express = require('express');
 const { get } = require('../models/database');
 const { authenticateToken } = require('../middleware/auth');
-const { logger } = require('../utils/logger');
 
 const router = express.Router();
 
 // 获取Dashboard统计数据
 router.get('/', authenticateToken, async (req, res, next) => {
   try {
-    logger.info('=== 开始获取 Dashboard 统计数据 ===');
+    console.info('=== 开始获取 Dashboard 统计数据 ===');
     const { start_date, end_date, grade } = req.query;
-    logger.info('请求参数:', {
+    console.info('请求参数:', {
       start_date,
       end_date,
       grade,
@@ -25,40 +24,40 @@ router.get('/', authenticateToken, async (req, res, next) => {
     // 日期条件处理
     if (start_date) {
       if (!isValidDate(start_date)) {
-        logger.warn('无效的开始日期:', start_date);
+        console.warn('无效的开始日期:', start_date);
       }
       dateCondition += ' AND b.date >= ?';
       params.push(start_date);
     }
     if (end_date) {
       if (!isValidDate(end_date)) {
-        logger.warn('无效的结束日期:', end_date);
+        console.warn('无效的结束日期:', end_date);
       }
       dateCondition += ' AND b.date <= ?';
       params.push(end_date);
     }
     if (grade) {
       if (!['高一', '高二', '高三'].includes(grade)) {
-        logger.warn('无效的年级值:', grade);
+        console.warn('无效的年级值:', grade);
       }
       gradeCondition = ' AND s.grade = ?';
       params.push(grade);
     }
 
-    logger.info('SQL条件参数:', {
+    console.info('SQL条件参数:', {
       dateCondition,
       gradeCondition,
       params
     });
 
     // 1. 获取学生总数
-    logger.info('开始获取学生总数...');
+    console.info('开始获取学生总数...');
     const studentCountQuery = 'SELECT COUNT(*) as count FROM students' + (grade ? ' WHERE grade = ?' : '');
     const [studentCount] = await get(studentCountQuery, grade ? [grade] : []);
-    logger.info('学生总数:', studentCount);
+    console.info('学生总数:', studentCount);
 
     // 2. 获取行为记录总数
-    logger.info('开始获取行为记录总数...');
+    console.info('开始获取行为记录总数...');
     const behaviorCountQuery = `
       SELECT COUNT(*) as count 
       FROM behaviors b 
@@ -66,20 +65,20 @@ router.get('/', authenticateToken, async (req, res, next) => {
       WHERE 1=1 ${dateCondition} ${gradeCondition}
     `;
     const [behaviorCount] = await get(behaviorCountQuery, params);
-    logger.info('行为记录总数:', behaviorCount);
+    console.info('行为记录总数:', behaviorCount);
 
     // 3. 获取年级分布
-    logger.info('开始获取年级分布...');
+    console.info('开始获取年级分布...');
     const gradeDistQuery = `
       SELECT grade, COUNT(*) as count
       FROM students
       GROUP BY grade
     `;
     const gradeDist = await get(gradeDistQuery);
-    logger.info('年级分布数据:', gradeDist);
+    console.info('年级分布数据:', gradeDist);
 
     // 4. 获取行为类别统计
-    logger.info('开始获取行为类别统计...');
+    console.info('开始获取行为类别统计...');
     const behaviorStatsQuery = `
       SELECT 
         bt.category,
@@ -93,10 +92,10 @@ router.get('/', authenticateToken, async (req, res, next) => {
       GROUP BY bt.category
     `;
     const behaviorStats = await get(behaviorStatsQuery, params);
-    logger.info('行为类别统计:', behaviorStats);
+    console.info('行为类别统计:', behaviorStats);
 
     // 5. 获取行为类型分布
-    logger.info('开始获取行为类型分布...');
+    console.info('开始获取行为类型分布...');
     const typeDistributionQuery = `
       SELECT 
         b.behavior_type as name,
@@ -119,7 +118,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
       ORDER BY bt.category, value DESC
     `;
     const typeDistribution = await get(typeDistributionQuery, params);
-    logger.info('行为类型分布:', typeDistribution);
+    console.info('行为类型分布:', typeDistribution);
 
     // 为行为类型添加颜色
     const violationColors = [
@@ -143,7 +142,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
     }));
 
     // 6. 获取各班级违纪排名
-    logger.info('开始获取班级违纪排名...');
+    console.info('开始获取班级违纪排名...');
     const classRankingQuery = `
       SELECT 
         s.grade,
@@ -159,10 +158,10 @@ router.get('/', authenticateToken, async (req, res, next) => {
       LIMIT 10
     `;
     const classRanking = await get(classRankingQuery, params);
-    logger.info('班级违纪排名:', classRanking);
+    console.info('班级违纪排名:', classRanking);
 
     // 7. 获取时间趋势
-    logger.info('开始获取时间趋势...');
+    console.info('开始获取时间趋势...');
     const trendQuery = `
       SELECT 
         DATE(b.date) as date,
@@ -176,10 +175,10 @@ router.get('/', authenticateToken, async (req, res, next) => {
       ORDER BY date
     `;
     const trend = await get(trendQuery, params);
-    logger.info('时间趋势数据:', trend);
+    console.info('时间趋势数据:', trend);
 
     // 8. 获取最近违纪记录
-    logger.info('开始获取最近违纪记录...');
+    console.info('开始获取最近违纪记录...');
     const recentQuery = `
       SELECT 
         b.date,
@@ -196,7 +195,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
       LIMIT 5
     `;
     const recentViolations = await get(recentQuery, params);
-    logger.info('最近违纪记录:', recentViolations);
+    console.info('最近违纪记录:', recentViolations);
 
     // 准备返回数据
     const responseData = {
@@ -216,7 +215,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
     };
 
     // 数据验证
-    logger.info('数据验证结果:', {
+    console.info('数据验证结果:', {
       hasStudentCount: studentCount.count > 0,
       hasBehaviorCount: behaviorCount.count > 0,
       hasGradeDistribution: gradeDist.length > 0,
@@ -227,7 +226,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
       hasRecentViolations: recentViolations.length > 0
     });
 
-    logger.info('返回的完整数据结构:', {
+    console.info('返回的完整数据结构:', {
       hasOverview: !!responseData.overview,
       hasClassRanking: !!responseData.class_ranking,
       hasTrend: !!responseData.trend,
@@ -236,10 +235,10 @@ router.get('/', authenticateToken, async (req, res, next) => {
     });
 
     res.json(responseData);
-    logger.info('=== Dashboard 统计数据获取完成 ===');
+    console.info('=== Dashboard 统计数据获取完成 ===');
 
   } catch (err) {
-    logger.error('获取Dashboard统计数据失败:', {
+    console.error('获取Dashboard统计数据失败:', {
       error: err.message,
       stack: err.stack,
       query: err.sql,
@@ -398,28 +397,15 @@ router.get('/summary', authenticateToken, async (req, res, next) => {
 // 获取统计分析数据
 router.get('/analysis', authenticateToken, async (req, res, next) => {
   try {
-    logger.info('=== 开始获取统计分析数据 ===');
+    console.info('=== 开始获取统计分析数据 ===');
     const { grade, start_date, end_date } = req.query;
-    logger.info('接收到的请求参数:', {
+    console.info('接收到的请求参数:', {
       grade,
       start_date,
       end_date,
       headers: req.headers,
       url: req.url
     });
-
-    // 验证日期格式
-    if (start_date && !isValidDate(start_date)) {
-      logger.warn('无效的开始日期格式:', start_date);
-    }
-    if (end_date && !isValidDate(end_date)) {
-      logger.warn('无效的结束日期格式:', end_date);
-    }
-
-    // 验证年级值
-    if (grade && !['高一', '高二', '高三'].includes(grade)) {
-      logger.warn('无效的年级值:', grade);
-    }
 
     const params = [];
     let dateCondition = '';
@@ -438,121 +424,91 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
       params.push(grade);
     }
 
-    logger.info('构建的查询条件:', {
-      dateCondition,
-      gradeCondition,
-      params,
-      hasDateFilter: !!dateCondition,
-      hasGradeFilter: !!gradeCondition
-    });
-
-    // 1. 获取年级分布数据
-    logger.info('开始查询年级分布...');
-    const gradeQuery = `
-      SELECT grade, COUNT(*) as count
-      FROM students
-      WHERE grade IN ('高一', '高二', '高三')
-      GROUP BY grade
-    `;
-    logger.debug('年级分布SQL:', gradeQuery);
-    const gradeResults = await get(gradeQuery);
-    logger.info('年级分布原始数据:', gradeResults);
-
-    // 初始化年级分布数据
-    const gradeDistribution = {
-      '高一': 0,
-      '高二': 0,
-      '高三': 0
-    };
-
-    let totalStudents = 0;
-    gradeResults.forEach(result => {
-      logger.debug('处理年级数据:', result);
-      if (result.grade in gradeDistribution) {
-        const count = parseInt(result.count);
-        gradeDistribution[result.grade] = count;
-        totalStudents += count;
-        logger.debug(`年级 ${result.grade} 学生数: ${count}`);
-      } else {
-        logger.warn('发现未知年级:', result.grade);
-      }
-    });
-
-    logger.info('年级分布统计结果:', {
-      distribution: gradeDistribution,
-      total: totalStudents
-    });
-
-    // 2. 获取行为统计数据
-    logger.info('开始查询行为统计...');
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-
-    logger.info('当月日期范围:', {
-      start: monthStart.toISOString(),
-      end: monthEnd.toISOString()
-    });
-
-    const behaviorQuery = `
+    // 获取各年级违纪率数据
+    const violationRateQuery = `
+      WITH GradeStats AS (
+        SELECT 
+          COALESCE(s.grade, '未知') as grade,
+          COUNT(DISTINCT s.id) as total_students,
+          COUNT(DISTINCT CASE WHEN bt.category = '违纪' THEN b.student_id END) as violation_students
+        FROM students s
+        LEFT JOIN behaviors b ON s.id = b.student_id AND 1=1 ${dateCondition}
+        LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
+        WHERE 1=1 ${gradeCondition}
+        GROUP BY s.grade
+      )
       SELECT 
-        bt.category,
-        COUNT(DISTINCT b.id) as count
-      FROM behaviors b
-      JOIN behavior_types bt ON b.behavior_type = bt.name
-      WHERE b.date BETWEEN ? AND ?
-      GROUP BY bt.category
+        grade,
+        total_students,
+        COALESCE(violation_students, 0) as violation_students,
+        ROUND(COALESCE(violation_students * 100.0 / NULLIF(total_students, 0), 0), 2) as violation_rate
+      FROM GradeStats
+      ORDER BY 
+        CASE grade
+          WHEN '高一' THEN 1
+          WHEN '高二' THEN 2
+          WHEN '高三' THEN 3
+          ELSE 4
+        END
     `;
-    
-    logger.debug('行为统计SQL:', behaviorQuery);
-    logger.debug('行为统计参数:', [monthStart, monthEnd]);
-    
-    const behaviorResults = await get(behaviorQuery, [monthStart, monthEnd]);
-    logger.info('行为统计原始数据:', behaviorResults);
 
-    // 处理行为统计数据
-    const behaviorStats = {
-      violation: 0,
-      excellent: 0
-    };
+    // 获取月度违纪率趋势
+    const monthlyTrendQuery = `
+      WITH MonthlyStats AS (
+        SELECT 
+          strftime('%Y-%m', COALESCE(b.date, date('now'))) as month,
+          COUNT(DISTINCT s.id) as total_students,
+          COUNT(DISTINCT CASE WHEN bt.category = '违纪' THEN b.student_id END) as violation_students
+        FROM students s
+        LEFT JOIN behaviors b ON s.id = b.student_id AND 1=1 ${dateCondition}
+        LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
+        WHERE 1=1 ${gradeCondition}
+        GROUP BY strftime('%Y-%m', COALESCE(b.date, date('now')))
+      )
+      SELECT 
+        month,
+        total_students,
+        COALESCE(violation_students, 0) as violation_students,
+        ROUND(COALESCE(violation_students * 100.0 / NULLIF(total_students, 0), 0), 2) as violation_rate
+      FROM MonthlyStats
+      ORDER BY month
+    `;
 
-    behaviorResults.forEach(result => {
-      logger.debug('处理行为数据:', result);
-      if (result.category === '违纪') {
-        behaviorStats.violation = parseInt(result.count);
-      } else if (result.category === '优秀') {
-        behaviorStats.excellent = parseInt(result.count);
-      } else {
-        logger.warn('发现未知行为类别:', result.category);
-      }
-    });
+    // 获取总体违纪率
+    const totalStatsQuery = `
+      SELECT 
+        COUNT(DISTINCT s.id) as total_students,
+        COUNT(DISTINCT CASE WHEN bt.category = '违纪' THEN b.student_id END) as violation_students,
+        ROUND(COALESCE(COUNT(DISTINCT CASE WHEN bt.category = '违纪' THEN b.student_id END) * 100.0 / 
+          NULLIF(COUNT(DISTINCT s.id), 0), 0), 2) as total_violation_rate
+      FROM students s
+      LEFT JOIN behaviors b ON s.id = b.student_id AND 1=1 ${dateCondition}
+      LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
+      WHERE 1=1 ${gradeCondition}
+    `;
 
-    logger.info('行为统计结果:', behaviorStats);
+    // 执行查询
+    const [violationRates, monthlyTrends, totalStats] = await Promise.all([
+      get(violationRateQuery, params),
+      get(monthlyTrendQuery, params),
+      get(totalStatsQuery, params)
+    ]);
 
     // 准备返回数据
     const responseData = {
-      totalStudents,
-      gradeDistribution,
-      behaviorStats: {
-        currentMonth: {
-          violation: behaviorStats.violation,
-          excellent: behaviorStats.excellent
-        }
-      }
+      totalStudents: totalStats[0].total_students,
+      totalViolationStudents: totalStats[0].violation_students,
+      totalViolationRate: totalStats[0].total_violation_rate,
+      gradeViolationRates: violationRates,
+      monthlyTrends: monthlyTrends
     };
 
-    logger.info('准备返回的数据:', responseData);
-    logger.debug('数据验证:', {
-      hasGradeData: Object.values(gradeDistribution).some(v => v > 0),
-      hasBehaviorData: behaviorStats.violation > 0 || behaviorStats.excellent > 0,
-      totalStudentsMatch: totalStudents === Object.values(gradeDistribution).reduce((a, b) => a + b, 0)
-    });
-
+    console.info('准备返回的数据:', responseData);
     res.json(responseData);
-    logger.info('=== 统计分析数据获取完成 ===');
+    console.info('=== 统计分析数据获取完成 ===');
 
   } catch (err) {
-    logger.error('获取统计数据失败:', {
+    console.error('获取统计数据失败:', {
       error: err.message,
       stack: err.stack,
       query: err.sql,

@@ -27,20 +27,17 @@ async function insertMockStudents() {
         successCount++;
         
         if (successCount % 10 === 0) {
-          logger.info(`已成功插入 ${successCount} 条学生记录`);
+  
         }
       } catch (err) {
-        logger.error(`插入学生记录失败:`, {
-          student: student.name,
-          error: err.message
-        });
+
       }
     }
 
-    logger.info(`批量插入完成，共成功插入 ${successCount} 条学生记录`);
+
     process.exit(0);
   } catch (err) {
-    logger.error('批量插入学生记录时发生错误:', err);
+
     process.exit(1);
   }
 }
