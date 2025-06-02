@@ -264,6 +264,12 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
 // 删除学生
 router.delete('/:id', authenticateToken, async (req, res, next) => {
   try {
+    // 检查学生是否存在
+    const [student] = await get('SELECT * FROM students WHERE id = ?', [req.params.id]);
+    if (!student) {
+      return res.status(404).json({ message: '未找到该学生' });
+    }
+
     // 开始事务
     await run('BEGIN TRANSACTION');
 
@@ -272,22 +278,34 @@ router.delete('/:id', authenticateToken, async (req, res, next) => {
       await run('DELETE FROM behaviors WHERE student_id = ?', [req.params.id]);
       
       // 再删除学生记录
-      await run('DELETE FROM students WHERE id = ?', [req.params.id]);
+      const result = await run('DELETE FROM students WHERE id = ?', [req.params.id]);
+
+      if (result.changes === 0) {
+        await run('ROLLBACK');
+        return res.status(404).json({ message: '删除失败：学生不存在' });
+      }
 
       // 提交事务
       await run('COMMIT');
 
-      logger.logOperation({
-        type: 'delete',
-        module: 'students',
-        description: `删除学生`,
-        status: 'success',  
-        username: req.user.username,
-        ip: req.ip,
-        details: {
-          id: req.params.id,
-        }
-      });
+      // 记录操作日志（不在事务中处理）
+      try {
+        await logger.logOperation({
+          type: 'delete',
+          module: 'students',
+          description: `删除学生: ${student.name}`,
+          status: 'success',  
+          username: req.user.username,
+          details: {
+            id: req.params.id,
+            student_name: student.name,
+            student_id: student.student_id
+          }
+        });
+      } catch (logError) {
+        console.error('记录删除操作日志失败:', logError);
+        // 继续执行，不影响删除操作的结果
+      }
 
       res.status(204).send();
     } catch (err) {
@@ -296,6 +314,10 @@ router.delete('/:id', authenticateToken, async (req, res, next) => {
       throw err;
     }
   } catch (err) {
+    console.error('删除学生失败:', err);
+    if (err.code === 'SQLITE_BUSY' || err.code === 'SQLITE_LOCKED') {
+      return res.status(409).json({ message: '数据库忙，请稍后重试' });
+    }
     next(err);
   }
 });
@@ -403,6 +425,89 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
       errors: errors.length > 0 ? errors : undefined
     });
   } catch (err) {
+    next(err);
+  }
+});
+
+// 批量删除学生
+router.post('/batch-delete', authenticateToken, async (req, res, next) => {
+  const { ids } = req.body;
+  
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ message: '请选择要删除的学生' });
+  }
+
+  try {
+    // 开始事务
+    await run('BEGIN TRANSACTION');
+
+    try {
+      // 获取要删除的学生信息（用于日志记录）
+      const students = await get(
+        'SELECT id, name, student_id FROM students WHERE id IN (' + ids.map(() => '?').join(',') + ')',
+        ids
+      );
+
+      if (students.length === 0) {
+        await run('ROLLBACK');
+        return res.status(404).json({ message: '未找到要删除的学生' });
+      }
+
+      // 先删除这些学生的所有行为记录
+      await run(
+        'DELETE FROM behaviors WHERE student_id IN (' + ids.map(() => '?').join(',') + ')',
+        ids
+      );
+
+      // 再删除学生记录
+      const result = await run(
+        'DELETE FROM students WHERE id IN (' + ids.map(() => '?').join(',') + ')',
+        ids
+      );
+
+      // 提交事务
+      await run('COMMIT');
+
+      // 记录操作日志
+      try {
+        for (const student of students) {
+          await logger.logOperation({
+            type: 'delete',
+            module: 'students',
+            description: `批量删除学生: ${student.name}`,
+            status: 'success',
+            username: req.user.username,
+            details: {
+              id: student.id,
+              student_name: student.name,
+              student_id: student.student_id
+            }
+          });
+        }
+      } catch (logError) {
+        console.error('记录批量删除操作日志失败:', logError);
+        // 继续执行，不影响删除操作的结果
+      }
+
+      res.json({
+        message: '批量删除成功',
+        deletedCount: result.changes,
+        details: {
+          total: ids.length,
+          success: result.changes,
+          studentNames: students.map(s => s.name)
+        }
+      });
+    } catch (err) {
+      // 如果出错，回滚事务
+      await run('ROLLBACK');
+      throw err;
+    }
+  } catch (err) {
+    console.error('批量删除学生失败:', err);
+    if (err.code === 'SQLITE_BUSY' || err.code === 'SQLITE_LOCKED') {
+      return res.status(409).json({ message: '数据库忙，请稍后重试' });
+    }
     next(err);
   }
 });

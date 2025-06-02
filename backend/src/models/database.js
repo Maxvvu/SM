@@ -105,7 +105,7 @@ async function initDatabase() {
         student_id INTEGER NOT NULL,
         behavior_type TEXT NOT NULL,
         description TEXT,
-        date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        date TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime')),
         image_url TEXT,
         FOREIGN KEY (student_id) REFERENCES students (id),
         FOREIGN KEY (behavior_type) REFERENCES behavior_types (name)

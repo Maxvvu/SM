@@ -182,7 +182,7 @@
         </el-table-column>
         <el-table-column prop="date" label="记录时间" sortable width="180">
           <template #default="scope">
-            {{ new Date(scope.row.date).toLocaleString() }}
+            {{ scope.row.date }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="220" fixed="right" align="left">
@@ -254,7 +254,7 @@
         <div class="detail-body">
           <div class="detail-item">
             <label>记录时间：</label>
-            <span>{{ new Date(selectedBehavior.date).toLocaleString() }}</span>
+            <span>{{ selectedBehavior.date }}</span>
           </div>
 
           <div class="detail-item description">
@@ -343,10 +343,8 @@
             v-model="form.date"
             type="datetime"
             placeholder="选择日期时间"
-            format="YYYY-MM-DD HH:mm:ss"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            :default-time="new Date(2000, 1, 1, 0, 0, 0)"
             style="width: 100%"
+            
           />
         </el-form-item>
         <el-form-item label="描述" prop="description">
@@ -392,6 +390,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import axios from 'axios'
+import moment from 'moment'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Plus, 
@@ -428,7 +427,7 @@ const form = ref({
   student_id: '',
   behavior_type: '',
   description: '',
-  date: new Date().toISOString(),
+  date: "",
   image_url: ''
 })
 
@@ -444,7 +443,28 @@ const rules = {
     { max: 200, message: '最多输入200个字符', trigger: 'blur' }
   ],
   date: [
-    { required: true, message: '请选择时间', trigger: 'change' }
+    { required: true, message: '请选择时间', trigger: 'change' },
+    { 
+      validator: (rule, value, callback) => {
+        if (!value) {
+          callback(new Error('请选择时间'))
+        } else {
+          const selectedDate = new Date(value)
+          const now = new Date()
+          const oneYearAgo = new Date()
+          oneYearAgo.setFullYear(now.getFullYear() - 1)
+          
+          if (selectedDate > now) {
+            callback(new Error('不能选择未来时间'))
+          } else if (selectedDate < oneYearAgo) {
+            callback(new Error('不能选择超过一年前的时间'))
+          } else {
+            callback()
+          }
+        }
+      },
+      trigger: 'change'
+    }
   ]
 }
 
@@ -477,6 +497,30 @@ const dateShortcuts = [
       return [start, end]
     },
   }
+]
+
+// 添加日期选择器快捷选项
+const datePickerShortcuts = [
+  {
+    text: '今天',
+    value: new Date(),
+  },
+  {
+    text: '昨天',
+    value: () => {
+      const date = new Date()
+      date.setTime(date.getTime() - 3600 * 1000 * 24)
+      return date
+    },
+  },
+  {
+    text: '一周前',
+    value: () => {
+      const date = new Date()
+      date.setTime(date.getTime() - 3600 * 1000 * 24 * 7)
+      return date
+    },
+  },
 ]
 
 // 修改数据过滤和分页逻辑
@@ -574,23 +618,16 @@ const fetchBehaviors = async () => {
       throw new Error('获取数据失败：响应格式错误')
     }
     
-    // 更新数据
-    behaviors.value = response.data.sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    )
+    // 处理每条记录的时间格式
+    behaviors.value = response.data.map(behavior => ({
+      ...behavior,
+      date: moment(behavior.date).format('YYYY-MM-DD HH:mm:ss')
+    })).sort((a, b) => new Date(b.date) - new Date(a.date))
     
     console.log('列表数据更新成功，总条数:', behaviors.value.length)
   } catch (error) {
     console.error('获取行为记录失败:', error)
-    
-    let errorMessage = '获取数据失败'
-    if (error.response) {
-      const { status, data } = error.response
-      console.error('获取数据错误响应:', { status, data })
-      errorMessage = data?.message || '获取数据失败，请稍后重试'
-    }
-    
-    ElMessage.error(errorMessage)
+    ElMessage.error(error.message || '获取数据失败')
   } finally {
     loading.value = false
   }
@@ -690,7 +727,7 @@ const handleAdd = () => {
     student_id: '',
     behavior_type: '',
     description: '',
-    date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    date: moment().format('YYYY-MM-DD HH:mm:ss'),
     image_url: ''
   }
   dialogVisible.value = true
@@ -698,12 +735,15 @@ const handleAdd = () => {
 
 // 修改行为记录
 const handleEdit = (row) => {
+  // 确保时间格式的一致性
+  const formattedDate = moment(row.date).format('YYYY-MM-DD HH:mm:ss')
+  
   form.value = {
     id: row.id,
     student_id: row.student_id,
     behavior_type: row.behavior_type,
     description: row.description,
-    date: row.date,
+    date: formattedDate,
     image_url: row.image_url
   }
   dialogVisible.value = true
@@ -714,23 +754,19 @@ const handleSubmit = async () => {
   if (!formRef.value || submitting.value) return
 
   try {
-    // 在验证前先检查并记录表单数据
-    console.log('提交前的表单数据:', { ...form.value })
-    
     await formRef.value.validate()
     
-    submitting.value = true
+    loading.value = true
     
-    // 保存image_url的临时变量
-    const imageUrl = form.value.image_url
-    console.log('保存的image_url:', imageUrl)
+    // 处理时区问题，确保使用本地时间
+    const formattedDate = moment(form.value.date).format('YYYY-MM-DDTHH:mm:ss')
     
     const requestData = {
       student_id: parseInt(form.value.student_id),
       behavior_type: form.value.behavior_type,
       description: form.value.description.trim(),
-      date: form.value.date,
-      image_url: imageUrl || ''  // 使用临时变量
+      date: formattedDate,
+      image_url: form.value.image_url || ''
     }
 
     console.log('准备提交的数据:', requestData)
@@ -741,56 +777,51 @@ const handleSubmit = async () => {
         console.log('执行更新操作，ID:', form.value.id)
         response = await axios.put(`/api/behaviors/${form.value.id}`, requestData)
         console.log('更新响应:', response.data)
+        
+        // 更新本地数据时进行时间转换
+        if (response.data) {
+          const updatedData = {
+            ...response.data,
+            date: moment(response.data.date).format('YYYY-MM-DD HH:mm:ss')
+          }
+          const index = behaviors.value.findIndex(b => b.id === form.value.id)
+          if (index !== -1) {
+            behaviors.value[index] = updatedData
+          }
+        }
       } else {
         console.log('执行添加操作')
         response = await axios.post('/api/behaviors', requestData)
         console.log('添加响应:', response.data)
-      }
-
-      if (response && response.data) {
-        if (form.value.id) {
-          const index = behaviors.value.findIndex(b => b.id === form.value.id)
-          if (index !== -1) {
-            behaviors.value[index] = response.data
+        
+        // 添加新数据时进行时间转换
+        if (response.data) {
+          const newData = {
+            ...response.data,
+            date: moment(response.data.date).format('YYYY-MM-DD HH:mm:ss')
           }
-        } else {
-          behaviors.value.unshift(response.data)
+          behaviors.value.unshift(newData)
         }
-        
-        ElMessage.success(form.value.id ? '更新成功' : '添加成功')
-        dialogVisible.value = false
-        
-        // 重置表单前记录当前数据
-        console.log('重置表单前的数据:', { ...form.value })
-        
-        // 重置表单
-        resetForm()
-        
-        console.log('重置表单后的数据:', { ...form.value })
       }
+      
+      ElMessage.success(form.value.id ? '更新成功' : '添加成功')
+      dialogVisible.value = false
+      
+      // 重置表单
+      resetForm()
     } catch (error) {
       console.error('操作失败:', error)
-      console.error('错误详情:', {
-        response: error.response?.data,
-        status: error.response?.status,
-        formData: { ...form.value },
-        requestData
-      })
-      
-      let errorMessage = error.response?.data?.message || (form.value.id ? '更新失败' : '添加失败')
-      
-      if (error.response?.status === 404) {
-        errorMessage = '找不到要更新的记录，请刷新页面后重试'
-        await fetchBehaviors()
-      }
-      
-      ElMessage.error(errorMessage)
+      throw error
     }
   } catch (error) {
-    console.error('表单验证失败:', error)
-    ElMessage.error('请检查表单填写是否正确')
+    console.error('提交失败:', error)
+    if (error.response?.data?.message) {
+      ElMessage.error(error.response.data.message)
+    } else {
+      ElMessage.error(form.value.id ? '更新失败' : '添加失败')
+    }
   } finally {
-    submitting.value = false
+    loading.value = false
   }
 }
 
@@ -801,7 +832,6 @@ const resetForm = () => {
     student_id: '',
     behavior_type: '',
     description: '',
-    date: new Date().toISOString().slice(0, 19).replace('T', ' '),
     image_url: ''
   }
   if (formRef.value) {

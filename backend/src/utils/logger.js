@@ -46,13 +46,17 @@ class Logger {
       status = 'success', 
       details = {} 
     } = operation;
-    
-
 
     try {
+      // 检查用户是否存在
+      const [user] = await get('SELECT username FROM users WHERE username = ?', [username]);
+      if (!user) {
+        console.error('记录日志失败：用户不存在', username);
+        return;
+      }
+
       // 将details对象转换为JSON字符串
       const detailsJson = JSON.stringify(details);
-      console.log('----insert into operation_logs----',detailsJson);
 
       // 插入日志记录到数据库
       const result = await run(
@@ -73,7 +77,8 @@ class Logger {
       };
     } catch (err) {
       console.error('记录操作日志失败:', err);
-      throw err;
+      // 不抛出错误，让操作继续进行
+      return null;
     }
   }
 

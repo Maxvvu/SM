@@ -17,19 +17,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="lastLogin" label="最后登录时间">
-          <template #default="{ row }">
-            {{ row.lastLogin ? new Date(row.lastLogin).toLocaleString('zh-CN', {
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-              hour12: false
-            }) : '从未登录' }}
-          </template>
-        </el-table-column>
+        <el-table-column prop="lastLogin" label="最后登录时间" />
         <el-table-column prop="status" label="状态">
           <template #default="{ row }">
             <el-tag :type="row.status === 'active' ? 'success' : 'info'">
@@ -394,4 +382,5 @@ onMounted(() => {
 .el-divider {
   margin: 16px 0;
 }
+</style> 
 </style> 

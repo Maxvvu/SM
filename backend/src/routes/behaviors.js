@@ -129,7 +129,7 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 // 创建行为记录
 router.post('/', authenticateToken, upload.single('image'), async (req, res, next) => {
   try {
-    const { student_id, behavior_type, description ,image_url} = req.body;
+    const { student_id, behavior_type, description ,image_url,date} = req.body;
     
      
 
@@ -149,7 +149,8 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res, nex
         student_id,
         behavior_type,
         description,
-        image_url
+        image_url,
+        date
       }
     });
     // 验证学生是否存在
@@ -159,9 +160,9 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res, nex
     }
 
     const result = await run(
-      `INSERT INTO behaviors (student_id, behavior_type, description, image_url)
-       VALUES (?, ?, ?, ?)`,
-      [student_id, behavior_type, description, image_url]
+      `INSERT INTO behaviors (student_id, behavior_type, description,date, image_url)
+       VALUES (?, ?, ?, ?, ?)`,
+      [student_id, behavior_type, description, date, image_url]
     );
 
     const [newBehavior] = await get(
@@ -181,7 +182,7 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res, nex
 // 更新行为记录
 router.put('/:id', authenticateToken, upload.single('image'), async (req, res, next) => {
   try {
-    const { student_id, behavior_type, description,image_url } = req.body;
+    const { student_id, behavior_type, description,image_url,date } = req.body;
 
     let updateFields = [];
     let params = [];
@@ -190,7 +191,8 @@ router.put('/:id', authenticateToken, upload.single('image'), async (req, res, n
       student_id,
       behavior_type,
       description,
-      image_url
+      image_url,
+      date
     };
     logger.logOperation({
       type: 'upadate',
@@ -203,7 +205,7 @@ router.put('/:id', authenticateToken, upload.single('image'), async (req, res, n
         student_id,
         behavior_type,
         description,
-        image_url
+        image_url,  
       }
     });
     for (const [key, value] of Object.entries(fields)) {

@@ -328,10 +328,29 @@
           v-if="selectedFields.includes('grade')"
           label="年级"
         >
-          <el-select v-model="batchForm.grade" placeholder="请选择年级" style="width: 100%">
-            <el-option label="高一" value="高一" />
-            <el-option label="高二" value="高二" />
-            <el-option label="高三" value="高三" />
+          <el-select 
+            v-model="batchForm.grade" 
+            placeholder="请选择年级" 
+            style="width: 100%"
+            filterable
+            allow-create
+            :filter-method="handleBatchGradeFilter"
+            @blur="handleBatchGradeBlur"
+          >
+            <el-option
+              v-for="grade in grades"
+              :key="grade"
+              :label="getGradeFilterDisplay(grade)"
+              :value="grade"
+            >
+              <el-tag
+                :type="getGradeTagType(grade)"
+                size="small"
+                class="grade-tag"
+              >
+                {{ getGradeFilterDisplay(grade) }}
+              </el-tag>
+            </el-option>
           </el-select>
         </el-form-item>
 
@@ -918,22 +937,29 @@ const handleBatchDelete = () => {
     .then(async () => {
       try {
         loading.value = true
-        // 创建删除请求的Promise数组
-        const deletePromises = selectedStudents.value.map(student => 
-          axios.delete(`/api/students/${student.id}`)
-        )
+        // 使用新的批量删除接口
+        const response = await axios.post('/api/students/batch-delete', {
+          ids: selectedStudents.value.map(student => student.id)
+        })
         
-        // 等待所有删除请求完成
-        await Promise.all(deletePromises)
-        
-        ElMessage.success('批量删除成功')
-        // 重新获取学生列表
-        await fetchStudents()
+        if (response.data.deletedCount > 0) {
+          ElMessage.success(`成功删除 ${response.data.deletedCount} 名学生`)
+          // 重新获取学生列表
+          await fetchStudents()
+        } else {
+          ElMessage.warning('没有学生被删除')
+        }
       } catch (error) {
         console.error('批量删除失败:', error)
-        ElMessage.error('批量删除失败')
+        if (error.response?.data?.message) {
+          ElMessage.error(error.response.data.message)
+        } else {
+          ElMessage.error('批量删除失败')
+        }
       } finally {
         loading.value = false
+        // 清空选择
+        selectedStudents.value = []
       }
     })
     .catch(() => {
@@ -1073,6 +1099,25 @@ const handleBatchEditSubmit = async () => {
     }
   } finally {
     loading.value = false
+  }
+}
+
+// 添加批量年级输入处理函数
+const handleBatchGradeFilter = (query) => {
+  // 如果输入的是数字，自动添加"级"后缀
+  if (/^\d{4}$/.test(query)) {
+    const year = parseInt(query)
+    const currentYear = new Date().getFullYear()
+    if (year >= currentYear - 5 && year <= currentYear + 5) {
+      batchForm.value.grade = query
+    }
+  }
+}
+
+// 在批量年级输入框失去焦点时处理
+const handleBatchGradeBlur = () => {
+  if (/^\d{4}$/.test(batchForm.value.grade)) {
+    batchForm.value.grade = `${batchForm.value.grade}级`
   }
 }
 
