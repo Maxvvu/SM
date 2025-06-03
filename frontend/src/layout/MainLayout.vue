@@ -19,7 +19,7 @@
       >
         <el-menu-item index="/dashboard">
           <el-icon><Monitor /></el-icon>
-          <template #title>仪表盘</template>
+          <template #title>首页</template>
         </el-menu-item>
 
         <el-sub-menu index="student">
@@ -191,7 +191,7 @@ const breadcrumbs = computed(() => {
   const paths = route.path.split('/').filter(Boolean)
   return ['首页', ...paths.map(path => {
     switch (path) {
-      case 'dashboard': return '仪表盘'
+      case 'dashboard': return '首页'
       case 'students': return '学生列表'
       case 'student-import': return '学生导入'
       case 'behaviors': return '行为记录管理'
