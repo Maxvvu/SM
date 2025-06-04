@@ -74,7 +74,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
   try {
     const { student_id, behavior_type, start_date, end_date } = req.query;
     let query = `
-      SELECT b.*, s.name as student_name, s.grade, s.class
+      SELECT b.*, s.name as student_name, s.grade, s.class, s.status as student_status
       FROM behaviors b
       JOIN students s ON b.student_id = s.id
       WHERE 1=1
@@ -110,7 +110,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
 router.get('/:id', authenticateToken, async (req, res, next) => {
   try {
     const [behavior] = await get(
-      `SELECT b.*, s.name as student_name, s.grade, s.class
+      `SELECT b.*, s.name as student_name, s.grade, s.class, s.status as student_status
        FROM behaviors b
        JOIN students s ON b.student_id = s.id
        WHERE b.id = ?`,
@@ -166,7 +166,7 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res, nex
     );
 
     const [newBehavior] = await get(
-      `SELECT b.*, s.name as student_name, s.grade, s.class
+      `SELECT b.*, s.name as student_name, s.grade, s.class, s.status as student_status
        FROM behaviors b
        JOIN students s ON b.student_id = s.id
        WHERE b.id = ?`,
@@ -225,7 +225,7 @@ router.put('/:id', authenticateToken, upload.single('image'), async (req, res, n
     );
 
     const [updatedBehavior] = await get(
-      `SELECT b.*, s.name as student_name, s.grade, s.class
+      `SELECT b.*, s.name as student_name, s.grade, s.class, s.status as student_status
        FROM behaviors b
        JOIN students s ON b.student_id = s.id
        WHERE b.id = ?`,

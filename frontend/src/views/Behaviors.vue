@@ -139,6 +139,17 @@
         <el-table-column prop="student_name" label="学生姓名" sortable />
         <el-table-column prop="grade" label="年级" sortable width="100" />
         <el-table-column prop="class" label="班级" sortable width="100" />
+        <el-table-column prop="student_status" label="学生状态" width="120">
+          <template #default="scope">
+            <el-tag
+              :style="getStatusStyle(scope.row.student_status)"
+              size="small"
+              :data-status="scope.row.student_status"
+            >
+              {{ scope.row.student_status || '正常' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="behavior_type" label="行为类型" width="120">
           <template #default="scope">
             <el-tag :type="getBehaviorType(scope.row.behavior_type)">
@@ -239,6 +250,13 @@
               </el-tag>
               <el-tag type="info" size="small" effect="plain">
                 {{ selectedBehavior.class }}班
+              </el-tag>
+              <el-tag
+                :style="getStatusStyle(selectedBehavior.student_status)"
+                size="small"
+                :data-status="selectedBehavior.student_status"
+              >
+                {{ selectedBehavior.student_status || '正常' }}
               </el-tag>
             </div>
           </div>
@@ -995,6 +1013,71 @@ const getGradeTagType = (grade) => {
   }
 }
 
+// 添加状态权重映射
+const statusWeight = {
+  '正常': 0,
+  '警告': 1,
+  '严重警告': 2,
+  '记过': 3,
+  '留校察看': 4,
+  '勒令退学': 5,
+  '开除学籍': 6
+}
+
+// 添加状态标签样式函数
+const getStatusStyle = (status) => {
+  switch (status) {
+    case '正常':
+      return {
+        backgroundColor: '#f0f9eb',
+        borderColor: '#e1f3d8',
+        color: '#67c23a'
+      }
+    case '警告':
+      return {
+        backgroundColor: '#fdf6ec',
+        borderColor: '#faecd8',
+        color: '#e6a23c'
+      }
+    case '严重警告':
+      return {
+        backgroundColor: '#fef0f0',
+        borderColor: '#fde2e2',
+        color: '#f56c6c'
+      }
+    case '记过':
+      return {
+        backgroundColor: '#fde2e2',
+        borderColor: '#fbc4c4',
+        color: '#f56c6c'
+      }
+    case '留校察看':
+      return {
+        backgroundColor: '#fcd3d3',
+        borderColor: '#fab6b6',
+        color: '#f56c6c'
+      }
+    case '勒令退学':
+      return {
+        backgroundColor: '#fb9898',
+        borderColor: '#fa7a7a',
+        color: '#fff'
+      }
+    case '开除学籍':
+      return {
+        backgroundColor: '#f56c6c',
+        borderColor: '#f34d4d',
+        color: '#fff'
+      }
+    default:
+      return {
+        backgroundColor: '#f0f9eb',
+        borderColor: '#e1f3d8',
+        color: '#67c23a'
+      }
+  }
+}
+
 onMounted(() => {
   fetchBehaviors()
   fetchStudents()
@@ -1399,5 +1482,73 @@ onMounted(() => {
     padding: 6px 8px;
     min-width: auto;
   }
+}
+
+/* 添加状态标签的动画效果 */
+:deep(.el-tag[data-status="严重警告"]),
+:deep(.el-tag[data-status="记过"]),
+:deep(.el-tag[data-status="留校察看"]),
+:deep(.el-tag[data-status="勒令退学"]),
+:deep(.el-tag[data-status="开除学籍"]) {
+  font-weight: 600;
+}
+
+/* 勒令退学和开除学籍的特殊动画效果 */
+:deep(.el-tag[data-status="勒令退学"]),
+:deep(.el-tag[data-status="开除学籍"]) {
+  background-image: linear-gradient(45deg, 
+    rgba(0,0,0,0.1) 25%, 
+    transparent 25%, 
+    transparent 50%, 
+    rgba(0,0,0,0.1) 50%, 
+    rgba(0,0,0,0.1) 75%, 
+    transparent 75%, 
+    transparent
+  );
+  background-size: 1rem 1rem;
+  animation: status-stripe 1s linear infinite;
+}
+
+/* 警告状态的闪烁效果 */
+:deep(.el-tag[data-status="警告"]) {
+  animation: warning-blink 2s ease-in-out infinite;
+}
+
+@keyframes status-stripe {
+  from { background-position: 0 0; }
+  to { background-position: 1rem 1rem; }
+}
+
+@keyframes warning-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+/* 添加悬停提示 */
+:deep(.el-tag[data-status]) {
+  cursor: default;
+}
+
+:deep(.el-tag[data-status]:hover)::after {
+  content: attr(data-status);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-bottom: 8px;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s ease-in-out forwards;
+}
+
+@keyframes tooltip-fade-in {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 </style> 
