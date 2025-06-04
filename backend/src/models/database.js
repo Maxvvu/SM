@@ -10,13 +10,10 @@ let db;
 
 function getDatabase() {
   if (!db) {
-
     db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
-
         throw err;
       }
-
     });
     db.run('PRAGMA foreign_keys = ON');
   }
@@ -27,8 +24,6 @@ async function initDatabase() {
   const db = getDatabase();
   
   try {
-
-
     // 创建users表
     await run(`
       CREATE TABLE IF NOT EXISTS users (
@@ -40,7 +35,6 @@ async function initDatabase() {
         last_login TIMESTAMP
       )
     `);
-
 
     // 创建operation_logs表
     await run(`
@@ -56,18 +50,15 @@ async function initDatabase() {
         FOREIGN KEY (username) REFERENCES users(username)
       )
     `);
- 
 
     // 检查是否需要插入管理员账户
     const [adminUser] = await get('SELECT * FROM users WHERE username = ?', ['admin']);
     if (!adminUser) {
-
       const hashedPassword = await bcrypt.hash('admin123', 10);
       await run(
         'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
         ['admin', hashedPassword, 'admin']
       );
-  
     }
 
     // 创建students表
@@ -82,10 +73,28 @@ async function initDatabase() {
         address TEXT,
         emergency_contact TEXT,
         emergency_phone TEXT,
-        notes TEXT
+        notes TEXT,
+        status TEXT CHECK(status IN ('正常', '警告', '严重警告', '记过', '留校察看', '勒令退学', '开除学籍')) DEFAULT '正常'
       )
     `);
 
+    // 检查是否需要添加status列
+    try {
+      // 检查status列是否存在
+      await get('SELECT status FROM students LIMIT 1');
+    } catch (err) {
+      if (err.message.includes('no such column: status')) {
+        console.log('正在添加status列...');
+        // 添加status列
+        await run(`
+          ALTER TABLE students 
+          ADD COLUMN status TEXT 
+          CHECK(status IN ('正常', '警告', '严重警告', '记过', '留校察看', '勒令退学', '开除学籍')) 
+          DEFAULT '正常'
+        `);
+        console.log('status列添加完成');
+      }
+    }
 
     // 创建behavior_types表
     await run(`
@@ -96,7 +105,6 @@ async function initDatabase() {
         description TEXT
       )
     `);
-
 
     // 创建behaviors表
     await run(`
@@ -112,11 +120,9 @@ async function initDatabase() {
       )
     `);
 
-
     // 检查是否需要插入基本行为类型
     const [typeCount] = await get('SELECT COUNT(*) as count FROM behavior_types');
     if (typeCount.count === 0) {
-
       const basicTypes = [
         ['迟到', '违纪', '上课迟到'],
         ['早退', '违纪', '未经许可提前离开'],
@@ -132,12 +138,8 @@ async function initDatabase() {
           [name, category, description]
         );
       }
-
     }
-
- 
   } catch (err) {
-
     throw err;
   }
 }
@@ -173,4 +175,4 @@ module.exports = {
   initDatabase,
   run,
   get
-}; 
+};

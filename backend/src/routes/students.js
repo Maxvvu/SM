@@ -86,7 +86,7 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
   console.log('----req.ip----',req.ip);
   console.log('----req.body----',req.body);
   try {
-    const { name, student_id, grade, class: className, teacher, address, emergency_contact, emergency_phone, notes, photo_url } = req.body;
+    const { name, student_id, grade, class: className, teacher, address, emergency_contact, emergency_phone, notes, photo_url, status } = req.body;
 
     // 验证年级
     if (!grade) {
@@ -118,10 +118,13 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
     }
 
     const result = await run(
-      `INSERT INTO students (name, student_id, grade, class, teacher, photo_url, address, emergency_contact, emergency_phone, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, student_id, finalGrade, className, teacher, photo_url, address, emergency_contact, emergency_phone, notes]
+      `INSERT INTO students (name, student_id, grade, class, teacher, photo_url, address, emergency_contact, emergency_phone, notes, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, student_id, finalGrade, className, teacher, photo_url, address, emergency_contact, emergency_phone, notes, status || '正常']
     );
+
+    // 获取新插入的学生数据
+    const [newStudent] = await get('SELECT * FROM students WHERE id = ?', [result.lastID]);
 
     logger.logOperation({
       type: 'create',
@@ -140,23 +143,12 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
         address,
         emergency_contact,
         emergency_phone,
-        notes
+        notes,
+        status
       }
     });
 
-    res.status(201).json({
-      id: result.lastID,
-      name,
-      student_id,
-      grade,
-      class: className,
-      teacher,
-      photo_url,
-      address,
-      emergency_contact,
-      emergency_phone,
-      notes
-    });
+    res.status(201).json(newStudent);
   } catch (err) {
     console.log('----err----',err);
     next(err);
@@ -166,12 +158,31 @@ router.post('/', authenticateToken, upload.single('photo'), async (req, res, nex
 // 更新学生
 router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, next) => {
   try {
-    const { name, student_id, grade, class: className, teacher, address, emergency_contact, emergency_phone, notes, photo_url } = req.body;
+    console.log('收到更新请求:', {
+      id: req.params.id,
+      body: req.body,
+      user: req.user
+    });
+
+    const { name, student_id, grade, class: className, teacher, address, emergency_contact, emergency_phone, notes, photo_url, status } = req.body;
     
     // 获取当前学生数据
     const [currentStudent] = await get('SELECT * FROM students WHERE id = ?', [req.params.id]);
     if (!currentStudent) {
+      console.log('未找到学生:', req.params.id);
       return res.status(404).json({ message: '未找到该学生' });
+    }
+
+    console.log('当前学生数据:', currentStudent);
+
+    // 验证状态值
+    const validStatus = ['正常', '警告', '严重警告', '记过', '留校察看', '勒令退学', '开除学籍'];
+    if (status !== undefined && !validStatus.includes(status)) {
+      console.log('无效的状态值:', status);
+      return res.status(400).json({ 
+        message: '无效的状态值',
+        details: `状态必须是以下值之一：${validStatus.join('、')}`
+      });
     }
 
     // 验证年级
@@ -188,6 +199,7 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
       
       // 验证年级格式
       if (!validGrades.includes(grade) && !yearGradePattern.test(grade) && !yearPattern.test(grade)) {
+        console.log('无效的年级格式:', grade);
         return res.status(400).json({ message: '无效的年级格式' });
       }
       
@@ -196,68 +208,146 @@ router.put('/:id', authenticateToken, upload.single('photo'), async (req, res, n
         const year = parseInt(yearPattern.test(grade) ? grade : finalGrade);
         const currentYear = new Date().getFullYear();
         if (year < currentYear - 5 || year > currentYear + 5) {
+          console.log('年级年份超出范围:', year);
           return res.status(400).json({ message: '年级年份必须在合理范围内' });
         }
       }
     }
 
     // 构建更新字段
+    const fields = {};
+    
+    // 只包含已提供的字段
+    if (name !== undefined) fields.name = name;
+    if (student_id !== undefined) fields.student_id = student_id;
+    if (grade !== undefined) fields.grade = finalGrade;
+    if (className !== undefined) fields.class = className;
+    if (teacher !== undefined) fields.teacher = teacher;
+    if (photo_url !== undefined) fields.photo_url = photo_url;
+    if (address !== undefined) fields.address = address;
+    if (emergency_contact !== undefined) fields.emergency_contact = emergency_contact;
+    if (emergency_phone !== undefined) fields.emergency_phone = emergency_phone;
+    if (notes !== undefined) fields.notes = notes;
+    if (status !== undefined) fields.status = status;
+
+    console.log('更新字段:', fields);
+
+    // 如果状态发生变化，记录日志
+    if (fields.status !== undefined && fields.status !== currentStudent.status) {
+      try {
+        await logger.logOperation({
+          type: 'update',
+          module: 'students',
+          description: `修改学生状态：${currentStudent.name}，从 ${currentStudent.status || '正常'} 变更为 ${fields.status}`,
+          status: 'success',
+          username: req.user.username,
+          ip: req.ip,
+          details: {
+            student_id: currentStudent.id,
+            student_name: currentStudent.name,
+            old_status: currentStudent.status || '正常',
+            new_status: fields.status
+          }
+        });
+      } catch (logError) {
+        console.error('记录状态变更日志失败:', logError);
+        // 继续执行，不影响更新操作
+      }
+    }
+
+    // 构建SQL更新语句
     const updates = [];
     const values = [];
-    const fields = {
-      name, 
-      student_id, 
-      grade: finalGrade, // 使用处理后的年级值
-      class: className, 
-      teacher, 
-      photo_url,
-      address, 
-      emergency_contact, 
-      emergency_phone, 
-      notes
-    };
-
-    // 只更新提供的字段
     Object.entries(fields).forEach(([key, value]) => {
-      if (value !== undefined) {
-        updates.push(`${key === 'class' ? 'class' : key} = ?`);
-        values.push(value);
-      }
+      updates.push(`${key === 'class' ? 'class' : key} = ?`);
+      values.push(value);
+    });
+
+    console.log('SQL更新字段:', {
+      updates,
+      values,
+      sql: `UPDATE students SET ${updates.join(', ')} WHERE id = ?`
     });
 
     // 如果没有要更新的字段，直接返回当前数据
     if (updates.length === 0) {
+      console.log('没有需要更新的字段');
       return res.json(currentStudent);
     }
 
     // 添加ID到values数组
     values.push(req.params.id);
 
-    // 执行更新
-    await run(
-      `UPDATE students SET ${updates.join(', ')} WHERE id = ?`,
-      values
-    );
+    try {
+      // 执行更新
+      const updateResult = await run(
+        `UPDATE students SET ${updates.join(', ')} WHERE id = ?`,
+        values
+      );
 
-    // 获取更新后的数据
-    const [updatedStudent] = await get('SELECT * FROM students WHERE id = ?', [req.params.id]);
+      console.log('更新结果:', updateResult);
 
-    logger.logOperation({
-      type: 'update',
-      module: 'students',
-      description: `更新学生信息`,
-      status: 'success',
-      username: req.user.username,
-      ip: req.ip,
-      details: {
+      // 获取更新后的数据
+      const [updatedStudent] = await get('SELECT * FROM students WHERE id = ?', [req.params.id]);
+
+      if (!updatedStudent) {
+        console.error('更新后未找到学生数据');
+        return res.status(500).json({ message: '更新后未能获取学生数据' });
+      }
+
+      console.log('更新成功:', updatedStudent);
+
+      // 记录更新操作日志
+      try {
+        await logger.logOperation({
+          type: 'update',
+          module: 'students',
+          description: `更新学生信息: ${updatedStudent.name}`,
+          status: 'success',
+          username: req.user.username,
+          ip: req.ip,
+          details: {
+            student_id: updatedStudent.id,
+            updated_fields: updates.map(u => u.split(' = ')[0])
+          }
+        });
+      } catch (logError) {
+        console.error('记录更新操作日志失败:', logError);
+      }
+
+      res.json(updatedStudent);
+    } catch (dbError) {
+      console.error('数据库更新失败:', {
+        error: dbError,
+        sql: `UPDATE students SET ${updates.join(', ')} WHERE id = ?`,
+        values: values
+      });
+      
+      // 检查是否是唯一约束违反
+      if (dbError.message.includes('UNIQUE constraint failed')) {
+        return res.status(400).json({ 
+          message: '学号已存在',
+          details: '请使用其他学号'
+        });
+      }
+      
+      throw dbError;
+    }
+  } catch (err) {
+    console.error('更新学生信息失败:', {
+      error: err,
+      stack: err.stack,
+      request: {
         id: req.params.id,
-        updatedFields: Object.keys(fields).filter(key => fields[key] !== undefined)
+        body: req.body
       }
     });
-
-    res.json(updatedStudent);
-  } catch (err) {
-    next(err);
+    
+    // 返回适当的错误响应
+    res.status(500).json({
+      message: '更新学生信息失败',
+      details: process.env.NODE_ENV === 'development' ? err.message : '服务器内部错误'
+    });
   }
 });
 
@@ -346,10 +436,11 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         grade: row.getCell(3).value,
         class: row.getCell(4).value,
         teacher: row.getCell(5).value,
-        address: row.getCell(6).value,
-        emergency_contact: row.getCell(7).value,
-        emergency_phone: row.getCell(8).value,
-        notes: row.getCell(9).value
+        status: row.getCell(6).value || '正常',
+        address: row.getCell(7).value,
+        emergency_contact: row.getCell(8).value,
+        emergency_phone: row.getCell(9).value,
+        notes: row.getCell(10).value
       };
       
       // 验证必填字段
@@ -377,6 +468,13 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         }
       }
       
+      // 验证状态值
+      const validStatus = ['正常', '警告', '严重警告', '记过', '留校察看', '勒令退学', '开除学籍'];
+      if (student.status && !validStatus.includes(student.status)) {
+        errors.push(`第${rowNumber}行：状态值无效，必须是以下值之一：${validStatus.join('、')}`);
+        return;
+      }
+      
       students.push(student);
     });
     
@@ -399,9 +497,9 @@ router.post('/import', authenticateToken, upload.single('file'), async (req, res
         }
         
         await run(
-          `INSERT INTO students (name, student_id, grade, class, teacher, address, emergency_contact, emergency_phone, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [student.name, student.student_id, student.grade, student.class, student.teacher, student.address, student.emergency_contact, student.emergency_phone, student.notes]
+          `INSERT INTO students (name, student_id, grade, class, teacher, status, address, emergency_contact, emergency_phone, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [student.name, student.student_id, student.grade, student.class, student.teacher, student.status, student.address, student.emergency_contact, student.emergency_phone, student.notes]
         );
         
         // 记录操作日志

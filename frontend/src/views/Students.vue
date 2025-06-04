@@ -113,6 +113,17 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="status" label="状态" sortable="custom" width="120">
+          <template #default="scope">
+            <el-tag
+              :style="getStatusStyle(scope.row.status)"
+              size="small"
+              :data-status="scope.row.status"
+            >
+              {{ scope.row.status || '正常' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="照片" width="100">
           <template #default="scope">
             <div class="image-container">
@@ -246,6 +257,19 @@
               <el-input v-model="form.teacher" placeholder="请输入班主任姓名" />
             </el-form-item>
           </el-col>
+          <el-col :span="12">
+            <el-form-item label="状态" prop="status">
+              <el-select v-model="form.status" placeholder="请选择学生状态" style="width: 100%">
+                <el-option label="正常" value="正常" />
+                <el-option label="警告" value="警告" />
+                <el-option label="严重警告" value="严重警告" />
+                <el-option label="记过" value="记过" />
+                <el-option label="留校察看" value="留校察看" />
+                <el-option label="勒令退学" value="勒令退学" />
+                <el-option label="开除学籍" value="开除学籍" />
+              </el-select>
+            </el-form-item>
+          </el-col>
         </el-row>
 
         <el-form-item label="照片">
@@ -320,6 +344,7 @@
             <el-option label="年级" value="grade" />
             <el-option label="班级" value="class" />
             <el-option label="班主任" value="teacher" />
+            <el-option label="状态" value="status" />
           </el-select>
         </el-form-item>
 
@@ -376,6 +401,26 @@
           />
         </el-form-item>
 
+        <!-- 状态字段 -->
+        <el-form-item
+          v-if="selectedFields.includes('status')"
+          label="状态"
+        >
+          <el-select
+            v-model="batchForm.status"
+            placeholder="请选择状态"
+            style="width: 100%"
+          >
+            <el-option label="正常" value="正常" />
+            <el-option label="警告" value="警告" />
+            <el-option label="严重警告" value="严重警告" />
+            <el-option label="记过" value="记过" />
+            <el-option label="留校察看" value="留校察看" />
+            <el-option label="勒令退学" value="勒令退学" />
+            <el-option label="开除学籍" value="开除学籍" />
+          </el-select>
+        </el-form-item>
+
         <el-alert
           v-if="selectedStudents.length"
           type="warning"
@@ -424,7 +469,8 @@ const form = ref({
   address: '',
   emergency_contact: '',
   emergency_phone: '',
-  notes: ''
+  notes: '',
+  status: '正常'
 })
 
 const formRef = ref(null)
@@ -594,6 +640,25 @@ const getGradeTagType = (grade) => {
 const currentPage = ref(1)
 const pageSize = ref(10)
 
+// 添加状态权重映射
+const statusWeight = {
+  '正常': 0,
+  '警告': 1,
+  '严重警告': 2,
+  '记过': 3,
+  '留校察看': 4,
+  '勒令退学': 5,
+  '开除学籍': 6
+}
+
+// 修改排序处理函数
+const handleSortChange = ({ prop, order }) => {
+  sortBy.value = prop
+  sortOrder.value = order
+  // 重置页码
+  currentPage.value = 1
+}
+
 // 修改过滤后的学生列表计算属性
 const filteredStudents = computed(() => {
   let result = [...students.value]
@@ -621,10 +686,18 @@ const filteredStudents = computed(() => {
   if (sortBy.value && sortOrder.value) {
     const order = sortOrder.value === 'ascending' ? 1 : -1
     result.sort((a, b) => {
-      if (sortBy.value === 'violation_count' || sortBy.value === 'excellent_count') {
-        return (a[sortBy.value] || 0) > (b[sortBy.value] || 0) ? order : -order
+      if (sortBy.value === 'status') {
+        // 使用状态权重进行排序
+        const weightA = statusWeight[a.status || '正常']
+        const weightB = statusWeight[b.status || '正常']
+        return (weightA - weightB) * order
+      } else if (sortBy.value === 'violation_count' || sortBy.value === 'excellent_count') {
+        return ((a[sortBy.value] || 0) - (b[sortBy.value] || 0)) * order
+      } else {
+        const valueA = a[sortBy.value] || ''
+        const valueB = b[sortBy.value] || ''
+        return valueA.toString().localeCompare(valueB.toString()) * order
       }
-      return a[sortBy.value] > b[sortBy.value] ? order : -order
     })
   }
   
@@ -663,14 +736,6 @@ const handleFilter = () => {
   currentPage.value = 1
 }
 
-// 修改排序处理函数，添加重置页码逻辑
-const handleSortChange = ({ prop, order }) => {
-  sortBy.value = prop
-  sortOrder.value = order
-  // 重置页码
-  currentPage.value = 1
-}
-
 const handleAdd = () => {
   form.value = {
     name: '',
@@ -683,7 +748,8 @@ const handleAdd = () => {
     address: '',
     emergency_contact: '',
     emergency_phone: '',
-    notes: ''
+    notes: '',
+    status: '正常'
   }
   dialogVisible.value = true
 }
@@ -833,11 +899,18 @@ const handleSubmit = async () => {
       address: form.value.address?.trim() || '',
       emergency_contact: form.value.emergency_contact?.trim() || '',
       emergency_phone: form.value.emergency_phone?.trim() || '',
-      notes: form.value.notes?.trim() || ''
+      notes: form.value.notes?.trim() || '',
+      status: form.value.status || '正常'
     }
 
-    // 打印完整的提交数据
-    console.log('完整的提交数据:', submitData)
+    // 打印请求前的完整数据
+    console.log('发送请求前的完整数据:', {
+      id: form.value.id,
+      submitData,
+      currentStatus: form.value.status,
+      method: form.value.id ? 'PUT' : 'POST',
+      url: form.value.id ? `/api/students/${form.value.id}` : '/api/students'
+    })
 
     let response
     if (form.value.id) {
@@ -881,24 +954,37 @@ const handleSubmit = async () => {
         address: '',
         emergency_contact: '',
         emergency_phone: '',
-        notes: ''
+        notes: '',
+        status: '正常'  // 确保设置默认状态
       }
       
       console.log('重置表单后的完整数据:', form.value)
+      
+      // 刷新学生列表
+      await fetchStudents()
     }
   } catch (error) {
     console.error('提交失败:', error)
     console.error('错误详情:', {
       formData: form.value,
       error: error.message,
-      response: error.response?.data
+      response: error.response?.data,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      fullError: error,
+      requestData: {
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.config?.data ? JSON.parse(error.config.data) : null
+      }
     })
     
+    // 显示更详细的错误信息
     if (error.response?.data?.message) {
       ElMessage.error(error.response.data.message)
+    } else if (error.response?.data?.details) {
+      ElMessage.error(error.response.data.details)
     } else if (error.message) {
-      ElMessage.error(error.message)
-    } else {
       ElMessage.error(form.value.id ? '更新失败' : '添加失败')
     }
   } finally {
@@ -993,7 +1079,8 @@ const batchForm = ref({
   gradeYear: '',
   grade: '',
   class: '',
-  teacher: ''
+  teacher: '',
+  status: ''
 })
 const batchFormRef = ref(null)
 
@@ -1010,7 +1097,8 @@ const handleBatchEdit = () => {
     gradeYear: '',
     grade: '',
     class: '',
-    teacher: ''
+    teacher: '',
+    status: ''
   }
   
   batchEditDialogVisible.value = true
@@ -1061,6 +1149,13 @@ const handleBatchEditSubmit = async () => {
         return
       }
       updateData.teacher = batchForm.value.teacher?.trim()
+    }
+    if (selectedFields.value.includes('status')) {
+      if (!batchForm.value.status) {
+        ElMessage.warning('请选择状态')
+        return
+      }
+      updateData.status = batchForm.value.status
     }
 
     console.log('批量更新数据:', updateData)
@@ -1118,6 +1213,82 @@ const handleBatchGradeFilter = (query) => {
 const handleBatchGradeBlur = () => {
   if (/^\d{4}$/.test(batchForm.value.grade)) {
     batchForm.value.grade = `${batchForm.value.grade}级`
+  }
+}
+
+// 添加状态标签类型函数
+const getStatusTagType = (status) => {
+  switch (status) {
+    case '正常':
+      return 'success'
+    case '警告':
+      return 'warning'
+    case '严重警告':
+      return 'danger'
+    case '记过':
+      return 'danger'
+    case '留校察看':
+      return 'danger'
+    case '勒令退学':
+      return 'danger'
+    case '开除学籍':
+      return 'danger'
+    default:
+      return 'success'
+  }
+}
+
+// 添加状态标签样式函数
+const getStatusStyle = (status) => {
+  switch (status) {
+    case '正常':
+      return {
+        backgroundColor: '#f0f9eb',
+        borderColor: '#e1f3d8',
+        color: '#67c23a'
+      }
+    case '警告':
+      return {
+        backgroundColor: '#fdf6ec',
+        borderColor: '#faecd8',
+        color: '#e6a23c'
+      }
+    case '严重警告':
+      return {
+        backgroundColor: '#fef0f0',
+        borderColor: '#fde2e2',
+        color: '#f56c6c'
+      }
+    case '记过':
+      return {
+        backgroundColor: '#fde2e2',
+        borderColor: '#fbc4c4',
+        color: '#f56c6c'
+      }
+    case '留校察看':
+      return {
+        backgroundColor: '#fcd3d3',
+        borderColor: '#fab6b6',
+        color: '#f56c6c'
+      }
+    case '勒令退学':
+      return {
+        backgroundColor: '#fb9898',
+        borderColor: '#fa7a7a',
+        color: '#fff'
+      }
+    case '开除学籍':
+      return {
+        backgroundColor: '#f56c6c',
+        borderColor: '#f34d4d',
+        color: '#fff'
+      }
+    default:
+      return {
+        backgroundColor: '#f0f9eb',
+        borderColor: '#e1f3d8',
+        color: '#67c23a'
+      }
   }
 }
 
@@ -1375,6 +1546,8 @@ onMounted(() => {
   line-height: 24px;
   font-weight: 500;
   transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 
 :deep(.el-tag:hover) {
@@ -1382,40 +1555,72 @@ onMounted(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-:deep(.el-tag.el-tag--success) {
-  background-color: #f0f9eb;
-  border-color: #e1f3d8;
-  color: #67c23a;
+/* 严重警告及以上状态的特殊效果 */
+:deep(.el-tag[data-status="严重警告"]),
+:deep(.el-tag[data-status="记过"]),
+:deep(.el-tag[data-status="留校察看"]),
+:deep(.el-tag[data-status="勒令退学"]),
+:deep(.el-tag[data-status="开除学籍"]) {
+  font-weight: 600;
 }
 
-:deep(.el-tag.el-tag--warning) {
-  background-color: #fdf6ec;
-  border-color: #faecd8;
-  color: #e6a23c;
+/* 勒令退学和开除学籍的特殊动画效果 */
+:deep(.el-tag[data-status="勒令退学"]),
+:deep(.el-tag[data-status="开除学籍"]) {
+  background-image: linear-gradient(45deg, 
+    rgba(0,0,0,0.1) 25%, 
+    transparent 25%, 
+    transparent 50%, 
+    rgba(0,0,0,0.1) 50%, 
+    rgba(0,0,0,0.1) 75%, 
+    transparent 75%, 
+    transparent
+  );
+  background-size: 1rem 1rem;
+  animation: status-stripe 1s linear infinite;
 }
 
-:deep(.el-tag.el-tag--primary) {
-  background-color: #ecf5ff;
-  border-color: #d9ecff;
-  color: #409eff;
+/* 警告状态的闪烁效果 */
+:deep(.el-tag[data-status="警告"]) {
+  animation: warning-blink 2s ease-in-out infinite;
 }
 
-:deep(.el-tag.el-tag--danger) {
-  background-color: #fef0f0;
-  border-color: #fde2e2;
-  color: #f56c6c;
+@keyframes status-stripe {
+  from { background-position: 0 0; }
+  to { background-position: 1rem 1rem; }
 }
 
-:deep(.el-tag.el-tag--info) {
-  background-color: #f4f4f5;
-  border-color: #e9e9eb;
-  color: #909399;
+@keyframes warning-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
 }
 
-:deep(.el-tag:not([class*="el-tag--"])) {
-  background-color: #f5f7fa;
-  border-color: #e4e7ed;
-  color: #606266;
+/* 添加悬停提示 */
+:deep(.el-tag[data-status]) {
+  cursor: default;
+}
+
+:deep(.el-tag[data-status]:hover)::after {
+  content: attr(data-status);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-bottom: 8px;
+  opacity: 0;
+  animation: tooltip-fade-in 0.2s ease-in-out forwards;
+}
+
+@keyframes tooltip-fade-in {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 /* 添加批量编辑对话框的样式 */
