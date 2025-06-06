@@ -53,8 +53,8 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="studentCount" label="学生数量" sortable="custom" />
-        <el-table-column prop="violationCount" label="违纪总数" sortable="custom">
+        <el-table-column prop="studentCount" label="学生数量" sortable="custom" width="120" />
+        <el-table-column prop="violationCount" label="违纪总数" sortable="custom" width="120">
           <template #default="scope">
             <el-tag :type="scope.row.violationCount > 0 ? 'danger' : 'info'" size="small">
               {{ scope.row.violationCount }}
@@ -222,12 +222,71 @@ const fetchBehaviorTypes = async () => {
   }
 }
 
-// 计算属性
+// 排序状态
+const sortState = ref({
+  prop: '',
+  order: ''
+})
+
+// 处理排序变化
+const handleSortChange = ({ prop, order }) => {
+  if (!prop) return
+  
+  sortState.value = { prop, order }
+  
+  const sortedTeachers = [...teachers.value]
+  sortedTeachers.sort((a, b) => {
+    const factor = order === 'ascending' ? 1 : -1
+    
+    switch (prop) {
+      case 'score':
+        return (a.score - b.score) * factor
+      case 'studentCount':
+        return (a.studentCount - b.studentCount) * factor
+      case 'violationCount':
+        return (a.violationCount - b.violationCount) * factor
+      case 'name':
+        return a.name.localeCompare(b.name) * factor
+      default:
+        return 0
+    }
+  })
+  
+  teachers.value = sortedTeachers
+}
+
+// 修改计算属性，保持排序状态
 const filteredTeachers = computed(() => {
-  if (!searchQuery.value) return teachers.value
-  return teachers.value.filter(teacher => 
-    teacher.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-  )
+  let result = teachers.value
+  
+  // 应用搜索过滤
+  if (searchQuery.value) {
+    result = result.filter(teacher => 
+      teacher.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+    )
+  }
+  
+  // 应用当前排序
+  if (sortState.value.prop && sortState.value.order) {
+    result = [...result].sort((a, b) => {
+      const factor = sortState.value.order === 'ascending' ? 1 : -1
+      
+      switch (sortState.value.prop) {
+        case 'score':
+          return (a.score - b.score) * factor
+        case 'studentCount':
+          return (a.studentCount - b.studentCount) * factor
+        case 'violationCount':
+          return (a.violationCount - b.violationCount) * factor
+        case 'name':
+          return a.name.localeCompare(b.name) * factor
+        default:
+          return 0
+      }
+    })
+  }
+  
+  return result
 })
 
 const paginatedTeachers = computed(() => {
@@ -239,18 +298,6 @@ const paginatedTeachers = computed(() => {
 // 事件处理
 const handleSearch = () => {
   currentPage.value = 1
-}
-
-const handleSortChange = ({ prop, order }) => {
-  if (!prop) return
-  
-  teachers.value.sort((a, b) => {
-    const factor = order === 'ascending' ? 1 : -1
-    if (prop === 'studentCount' || prop === 'violationCount') {
-      return (a[prop] - b[prop]) * factor
-    }
-    return a[prop].localeCompare(b[prop]) * factor
-  })
 }
 
 const handleSizeChange = (val) => {

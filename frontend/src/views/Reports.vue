@@ -38,7 +38,15 @@
         :empty-text="loading ? '加载中...' : '暂无数据'"
       >
         <el-table-column prop="student_name" label="学生姓名" width="120" />
+        <el-table-column prop="teacher" label="班主任" width="120" />
         <el-table-column prop="behavior_type" label="违纪类型" width="150" />
+        <el-table-column prop="behavior_score" label="扣分" width="100">
+          <template #default="scope">
+            <span :class="{ 'negative-score': scope.row.behavior_score < 0, 'positive-score': scope.row.behavior_score > 0 }">
+              {{ scope.row.behavior_score >= 0 ? '+' : '' }}{{ scope.row.behavior_score }}
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column prop="date" label="违纪时间" width="180">
           <template #default="scope">
             {{ formatDate(scope.row.date) }}
@@ -109,18 +117,31 @@ const fetchData = async () => {
       end_date: dateRange.value?.[1]?.toISOString()
     })
 
-    const detailResponse = await axios.get('/api/behaviors', {
-      params: {
-        grade: selectedGrade.value,
-        category: '违纪',
-        start_date: dateRange.value?.[0]?.toISOString(),
-        end_date: dateRange.value?.[1]?.toISOString()
+    // 获取学生数据（包含班主任信息）
+    const [behaviorsResponse, studentsResponse] = await Promise.all([
+      axios.get('/api/behaviors', {
+        params: {
+          grade: selectedGrade.value,
+          start_date: dateRange.value?.[0]?.toISOString(),
+          end_date: dateRange.value?.[1]?.toISOString()
+        }
+      }),
+      axios.get('/api/students')
+    ])
+
+    const students = studentsResponse.data
+    const behaviors = behaviorsResponse.data
+
+    // 将班主任信息添加到行为记录中
+    allData.value = behaviors.map(behavior => {
+      const student = students.find(s => s.name === behavior.student_name)
+      return {
+        ...behavior,
+        teacher: student?.teacher || '未分配'
       }
     })
 
-    console.log('违纪详细数据响应:', detailResponse.data)
-    allData.value = detailResponse.data
-    total.value = detailResponse.data.length
+    total.value = allData.value.length
     console.log('更新后的详细数据总数:', total.value)
 
   } catch (error) {
@@ -162,7 +183,9 @@ const exportReport = () => {
   // 准备导出数据
   const exportData = allData.value.map(item => ({
     '学生姓名': item.student_name,
+    '班主任': item.teacher,
     '违纪类型': item.behavior_type,
+    '扣分': item.behavior_score,
     '违纪时间': formatDate(item.date),
     '年级': item.grade,
     '班级': item.class,
@@ -212,5 +235,15 @@ const exportReport = () => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.negative-score {
+  color: #f56c6c;
+  font-weight: 600;
+}
+
+.positive-score {
+  color: #67c23a;
+  font-weight: 600;
 }
 </style> 
