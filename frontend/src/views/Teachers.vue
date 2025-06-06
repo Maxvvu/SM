@@ -47,6 +47,13 @@
           </template>
         </el-table-column>
         <el-table-column prop="studentCount" label="学生数量" sortable="custom" />
+        <el-table-column prop="violationCount" label="违纪总数" sortable="custom">
+          <template #default="scope">
+            <el-tag :type="scope.row.violationCount > 0 ? 'danger' : 'info'" size="small">
+              {{ scope.row.violationCount }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="scope">
             <el-button
@@ -128,13 +135,30 @@ const teacherForm = ref({
   name: '',
   classes: []
 })
+const behaviors = ref([])
+
+// 从行为管理中获取违纪信息
+const fetchBehaviors = async () => {
+  try {
+    const response = await axios.get('/api/behaviors')
+    behaviors.value = response.data
+  } catch (error) {
+    console.error('获取行为记录失败:', error)
+    ElMessage.error('获取行为记录失败')
+  }
+}
 
 // 从学生数据中获取教师信息
 const fetchTeachers = async () => {
   loading.value = true
   try {
-    const response = await axios.get('/api/students')
-    const students = response.data
+    const [studentsResponse, behaviorsResponse] = await Promise.all([
+      axios.get('/api/students'),
+      axios.get('/api/behaviors')
+    ])
+    
+    const students = studentsResponse.data
+    behaviors.value = behaviorsResponse.data
     
     // 提取所有不重复的教师信息
     const teacherMap = new Map()
@@ -144,12 +168,31 @@ const fetchTeachers = async () => {
           teacherMap.set(student.teacher, {
             name: student.teacher,
             classes: new Set([`${student.grade}年级${student.class}班`]),
-            studentCount: 1
+            studentCount: 1,
+            violationCount: 0
           })
         } else {
           const teacherData = teacherMap.get(student.teacher)
           teacherData.classes.add(`${student.grade}年级${student.class}班`)
           teacherData.studentCount++
+        }
+      }
+    })
+    
+    // 统计违纪次数
+    behaviors.value.forEach(behavior => {
+      if (behavior.behavior_type && behavior.student_name) {
+        // 找到该学生对应的教师
+        const student = students.find(s => s.name === behavior.student_name)
+        if (student && student.teacher) {
+          const teacherData = teacherMap.get(student.teacher)
+          if (teacherData) {
+            // 只统计违纪行为
+            const behaviorType = behaviorTypes.value.find(t => t.name === behavior.behavior_type)
+            if (behaviorType && behaviorType.category === '违纪') {
+              teacherData.violationCount++
+            }
+          }
         }
       }
     })
@@ -164,6 +207,18 @@ const fetchTeachers = async () => {
     ElMessage.error('获取教师数据失败')
   } finally {
     loading.value = false
+  }
+}
+
+// 获取行为类型列表
+const behaviorTypes = ref([])
+const fetchBehaviorTypes = async () => {
+  try {
+    const response = await axios.get('/api/behaviorTypes')
+    behaviorTypes.value = response.data
+  } catch (error) {
+    console.error('获取行为类型失败:', error)
+    ElMessage.error('获取行为类型失败')
   }
 }
 
@@ -191,7 +246,7 @@ const handleSortChange = ({ prop, order }) => {
   
   teachers.value.sort((a, b) => {
     const factor = order === 'ascending' ? 1 : -1
-    if (prop === 'studentCount') {
+    if (prop === 'studentCount' || prop === 'violationCount') {
       return (a[prop] - b[prop]) * factor
     }
     return a[prop].localeCompare(b[prop]) * factor
@@ -249,7 +304,8 @@ const handleSave = () => {
   } else {
     teachers.value.push({
       ...teacherForm.value,
-      studentCount: 0
+      studentCount: 0,
+      violationCount: 0
     })
   }
   
@@ -267,8 +323,9 @@ const handleCurrentChange = (val) => {
 }
 
 // 生命周期钩子
-onMounted(() => {
-  fetchTeachers()
+onMounted(async () => {
+  await fetchBehaviorTypes()
+  await fetchTeachers()
 })
 </script>
 
