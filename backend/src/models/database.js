@@ -102,9 +102,26 @@ async function initDatabase() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
         category TEXT NOT NULL,
-        description TEXT
+        description TEXT,
+        score INTEGER NOT NULL DEFAULT 0
       )
     `);
+
+    // 检查是否需要添加score列
+    try {
+      // 检查score列是否存在
+      await get('SELECT score FROM behavior_types LIMIT 1');
+    } catch (err) {
+      if (err.message.includes('no such column: score')) {
+        console.log('正在添加score列...');
+        // 添加score列
+        await run(`
+          ALTER TABLE behavior_types 
+          ADD COLUMN score INTEGER NOT NULL DEFAULT 0
+        `);
+        console.log('score列添加完成');
+      }
+    }
 
     // 创建behaviors表
     await run(`
@@ -124,18 +141,18 @@ async function initDatabase() {
     const [typeCount] = await get('SELECT COUNT(*) as count FROM behavior_types');
     if (typeCount.count === 0) {
       const basicTypes = [
-        ['迟到', '违纪', '上课迟到'],
-        ['早退', '违纪', '未经许可提前离开'],
-        ['打架', '违纪', '与他人发生肢体冲突'],
-        ['帮助同学', '优秀', '主动帮助有困难的同学'],
-        ['志愿服务', '优秀', '参与学校志愿服务活动'],
-        ['获奖', '优秀', '在比赛或竞赛中获奖']
+        ['迟到', '违纪', '上课迟到', -1],
+        ['早退', '违纪', '未经许可提前离开', -1],
+        ['打架', '违纪', '与他人发生肢体冲突', -3],
+        ['帮助同学', '优秀', '主动帮助有困难的同学', 1],
+        ['志愿服务', '优秀', '参与学校志愿服务活动', 2],
+        ['获奖', '优秀', '在比赛或竞赛中获奖', 3]
       ];
 
-      for (const [name, category, description] of basicTypes) {
+      for (const [name, category, description, score] of basicTypes) {
         await run(
-          'INSERT INTO behavior_types (name, category, description) VALUES (?, ?, ?)',
-          [name, category, description]
+          'INSERT INTO behavior_types (name, category, description, score) VALUES (?, ?, ?, ?)',
+          [name, category, description, score]
         );
       }
     }

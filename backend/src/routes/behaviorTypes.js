@@ -31,22 +31,34 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 // 创建行为类型
 router.post('/', authenticateToken, async (req, res, next) => {
   try {
-    const { name, category, description } = req.body;
+    const { name, category, description, score } = req.body;
 
     if (!name || !category) {
       return res.status(400).json({ message: '名称和类别不能为空' });
     }
 
+    // 验证分数
+    if (typeof score !== 'number') {
+      return res.status(400).json({ message: '分数必须是数字' });
+    }
+
+    if ((category === '违纪' && score >= 0) || (category === '优秀' && score <= 0)) {
+      return res.status(400).json({ 
+        message: category === '违纪' ? '违纪行为分数必须为负数' : '优秀表现分数必须为正数'
+      });
+    }
+
     const result = await run(
-      'INSERT INTO behavior_types (name, category, description) VALUES (?, ?, ?)',
-      [name, category, description]
+      'INSERT INTO behavior_types (name, category, description, score) VALUES (?, ?, ?, ?)',
+      [name, category, description, score]
     );
 
     res.status(201).json({
       id: result.lastID,
       name,
       category,
-      description
+      description,
+      score
     });
   } catch (err) {
     next(err);
@@ -56,15 +68,26 @@ router.post('/', authenticateToken, async (req, res, next) => {
 // 更新行为类型
 router.put('/:id', authenticateToken, async (req, res, next) => {
   try {
-    const { name, category, description } = req.body;
+    const { name, category, description, score } = req.body;
 
     if (!name || !category) {
       return res.status(400).json({ message: '名称和类别不能为空' });
     }
 
+    // 验证分数
+    if (typeof score !== 'number') {
+      return res.status(400).json({ message: '分数必须是数字' });
+    }
+
+    if ((category === '违纪' && score >= 0) || (category === '优秀' && score <= 0)) {
+      return res.status(400).json({ 
+        message: category === '违纪' ? '违纪行为分数必须为负数' : '优秀表现分数必须为正数'
+      });
+    }
+
     await run(
-      'UPDATE behavior_types SET name = ?, category = ?, description = ? WHERE id = ?',
-      [name, category, description, req.params.id]
+      'UPDATE behavior_types SET name = ?, category = ?, description = ?, score = ? WHERE id = ?',
+      [name, category, description, score, req.params.id]
     );
 
     const [updatedType] = await get('SELECT * FROM behavior_types WHERE id = ?', [req.params.id]);

@@ -150,11 +150,16 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="behavior_type" label="行为类型" width="120">
+        <el-table-column prop="behavior_type" label="行为类型" width="180">
           <template #default="scope">
-            <el-tag :type="getBehaviorType(scope.row.behavior_type)">
-              {{ scope.row.behavior_type }}
-            </el-tag>
+            <div class="behavior-type-container">
+              <el-tag :type="getBehaviorType(scope.row.behavior_type)">
+                {{ scope.row.behavior_type }}
+              </el-tag>
+              <span :class="['behavior-score', scope.row.behavior_score >= 0 ? 'positive' : 'negative']">
+                {{ scope.row.behavior_score >= 0 ? '+' : '' }}{{ scope.row.behavior_score }}分
+              </span>
+            </div>
           </template>
         </el-table-column>
         <el-table-column prop="description" label="描述" show-overflow-tooltip />
@@ -264,6 +269,9 @@
             <el-tag :type="getBehaviorType(selectedBehavior.behavior_type)" size="large">
               {{ selectedBehavior.behavior_type }}
             </el-tag>
+            <span :class="['behavior-score', selectedBehavior.behavior_score >= 0 ? 'positive' : 'negative']">
+              {{ selectedBehavior.behavior_score >= 0 ? '+' : '' }}{{ selectedBehavior.behavior_score }}分
+            </span>
           </div>
         </div>
 
@@ -1346,9 +1354,19 @@ onMounted(() => {
 }
 
 .behavior-type {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+
   .el-tag {
     font-size: 16px;
     padding: 8px 16px;
+  }
+
+  .behavior-score {
+    font-size: 14px;
+    font-weight: 600;
   }
 }
 
@@ -1550,5 +1568,24 @@ onMounted(() => {
 @keyframes tooltip-fade-in {
   from { opacity: 0; transform: translate(-50%, 10px); }
   to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.behavior-type-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.behavior-score {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.behavior-score.positive {
+  color: var(--el-color-success);
+}
+
+.behavior-score.negative {
+  color: var(--el-color-danger);
 }
 </style> 

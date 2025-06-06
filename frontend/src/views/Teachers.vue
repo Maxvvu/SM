@@ -3,6 +3,18 @@
     <div class="header">
       <h2>教师管理</h2>
       <div class="header-right">
+        <div class="filter-section">
+          <el-date-picker
+            v-model="selectedMonth"
+            type="month"
+            placeholder="选择月份"
+            format="YYYY年MM月"
+            value-format="YYYY-MM"
+            :clearable="false"
+            :disabled-date="disabledDate"
+            @change="handleMonthChange"
+          />
+        </div>
         <div class="search-box">
           <el-input
             v-model="searchQuery"
@@ -15,11 +27,6 @@
               <el-icon><Search /></el-icon>
             </template>
           </el-input>
-        </div>
-        <div class="action-group">
-          <el-button type="primary" @click="handleAdd">
-            添加教师
-          </el-button>
         </div>
       </div>
     </div>
@@ -54,17 +61,22 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column prop="score" label="班级总分" sortable="custom" width="200">
           <template #default="scope">
-            <el-button
-              size="small"
-              @click="handleEdit(scope.row)"
-            >编辑</el-button>
-            <el-button
-              size="small"
-              type="danger"
-              @click="handleDelete(scope.row)"
-            >删除</el-button>
+            <div class="score-container">
+              <div class="score-info">
+                <span class="base-score">基础分：1000</span>
+                <el-divider direction="vertical" />
+                <span :class="['current-score', scope.row.score < 1000 ? 'negative' : 'positive']">
+                  当前：{{ scope.row.score }}
+                </span>
+              </div>
+              <div class="score-change">
+                <span :class="['change', scope.row.scoreChange >= 0 ? 'positive' : 'negative']">
+                  {{ scope.row.scoreChange >= 0 ? '+' : '' }}{{ scope.row.scoreChange }}
+                </span>
+              </div>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -81,47 +93,15 @@
         />
       </div>
     </div>
-
-    <!-- 添加/编辑教师对话框 -->
-    <el-dialog
-      :title="dialogTitle"
-      v-model="dialogVisible"
-      width="500px"
-    >
-      <el-form :model="teacherForm" label-width="100px">
-        <el-form-item label="姓名">
-          <el-input v-model="teacherForm.name" />
-        </el-form-item>
-        <el-form-item label="管理班级">
-          <el-select
-            v-model="teacherForm.classes"
-            multiple
-            placeholder="请选择管理班级"
-          >
-            <el-option
-              v-for="grade in grades"
-              :key="grade"
-              :label="grade"
-              :value="grade"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSave">确定</el-button>
-        </span>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, User } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
 import axios from 'axios'
+import moment from 'moment'
 
 // 状态变量
 const loading = ref(false)
@@ -129,23 +109,18 @@ const searchQuery = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const teachers = ref([])
-const dialogVisible = ref(false)
-const dialogTitle = ref('')
-const teacherForm = ref({
-  name: '',
-  classes: []
-})
 const behaviors = ref([])
+const behaviorTypes = ref([])
+const selectedMonth = ref(moment().format('YYYY-MM'))
 
-// 从行为管理中获取违纪信息
-const fetchBehaviors = async () => {
-  try {
-    const response = await axios.get('/api/behaviors')
-    behaviors.value = response.data
-  } catch (error) {
-    console.error('获取行为记录失败:', error)
-    ElMessage.error('获取行为记录失败')
-  }
+// 禁用未来月份
+const disabledDate = (time) => {
+  return time.getTime() > Date.now()
+}
+
+// 处理月份变化
+const handleMonthChange = () => {
+  fetchTeachers()
 }
 
 // 从学生数据中获取教师信息
@@ -169,7 +144,10 @@ const fetchTeachers = async () => {
             name: student.teacher,
             classes: new Set([`${student.grade}年级${student.class}班`]),
             studentCount: 1,
-            violationCount: 0
+            violationCount: 0,
+            score: 1000,
+            scoreChange: 0,
+            monthlyScores: {} // 添加月度分数记录
           })
         } else {
           const teacherData = teacherMap.get(student.teacher)
@@ -179,22 +157,45 @@ const fetchTeachers = async () => {
       }
     })
     
-    // 统计违纪次数
+    // 统计违纪次数和计算分数
     behaviors.value.forEach(behavior => {
-      if (behavior.behavior_type && behavior.student_name) {
+      if (behavior.behavior_type && behavior.student_name && behavior.date) {
+        const behaviorMonth = moment(behavior.date).format('YYYY-MM')
         // 找到该学生对应的教师
         const student = students.find(s => s.name === behavior.student_name)
         if (student && student.teacher) {
           const teacherData = teacherMap.get(student.teacher)
           if (teacherData) {
-            // 只统计违纪行为
-            const behaviorType = behaviorTypes.value.find(t => t.name === behavior.behavior_type)
-            if (behaviorType && behaviorType.category === '违纪') {
-              teacherData.violationCount++
+            // 初始化月度分数记录
+            if (!teacherData.monthlyScores[behaviorMonth]) {
+              teacherData.monthlyScores[behaviorMonth] = {
+                score: 1000,
+                scoreChange: 0,
+                violationCount: 0
+              }
+            }
+            
+            // 统计违纪行为和分数变化
+            const behaviorScore = behavior.behavior_score || 0
+            teacherData.monthlyScores[behaviorMonth].scoreChange += behaviorScore
+            if (behaviorScore < 0) {
+              teacherData.monthlyScores[behaviorMonth].violationCount++
             }
           }
         }
       }
+    })
+    
+    // 计算所选月份的最终分数
+    teacherMap.forEach(teacher => {
+      const monthlyScore = teacher.monthlyScores[selectedMonth.value] || {
+        score: 1000,
+        scoreChange: 0,
+        violationCount: 0
+      }
+      teacher.score = Math.max(0, monthlyScore.score + monthlyScore.scoreChange)
+      teacher.scoreChange = monthlyScore.scoreChange
+      teacher.violationCount = monthlyScore.violationCount
     })
     
     // 转换为数组格式
@@ -211,7 +212,6 @@ const fetchTeachers = async () => {
 }
 
 // 获取行为类型列表
-const behaviorTypes = ref([])
 const fetchBehaviorTypes = async () => {
   try {
     const response = await axios.get('/api/behaviorTypes')
@@ -253,66 +253,6 @@ const handleSortChange = ({ prop, order }) => {
   })
 }
 
-const handleAdd = () => {
-  dialogTitle.value = '添加教师'
-  teacherForm.value = {
-    name: '',
-    classes: []
-  }
-  dialogVisible.value = true
-}
-
-const handleEdit = (row) => {
-  dialogTitle.value = '编辑教师'
-  teacherForm.value = {
-    name: row.name,
-    classes: [...row.classes]
-  }
-  dialogVisible.value = true
-}
-
-const handleDelete = (row) => {
-  ElMessageBox.confirm(
-    `确定要删除教师 ${row.name} 吗？`,
-    '警告',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    }
-  ).then(() => {
-    const index = teachers.value.findIndex(t => t.name === row.name)
-    if (index > -1) {
-      teachers.value.splice(index, 1)
-      ElMessage.success('删除成功')
-    }
-  }).catch(() => {})
-}
-
-const handleSave = () => {
-  if (!teacherForm.value.name.trim()) {
-    ElMessage.warning('请输入教师姓名')
-    return
-  }
-  
-  const index = teachers.value.findIndex(t => t.name === teacherForm.value.name)
-  if (index > -1) {
-    teachers.value[index] = {
-      ...teachers.value[index],
-      ...teacherForm.value
-    }
-  } else {
-    teachers.value.push({
-      ...teacherForm.value,
-      studentCount: 0,
-      violationCount: 0
-    })
-  }
-  
-  dialogVisible.value = false
-  ElMessage.success(dialogTitle.value === '添加教师' ? '添加成功' : '更新成功')
-}
-
 const handleSizeChange = (val) => {
   pageSize.value = val
   currentPage.value = 1
@@ -347,6 +287,12 @@ onMounted(async () => {
   align-items: center;
 }
 
+.filter-section {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .search-input {
   width: 250px;
 }
@@ -367,5 +313,51 @@ onMounted(async () => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.score-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.score-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.base-score {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.current-score {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.current-score.positive {
+  color: var(--el-color-success);
+}
+
+.current-score.negative {
+  color: var(--el-color-danger);
+}
+
+.score-change {
+  font-size: 12px;
+}
+
+.change {
+  font-weight: 500;
+}
+
+.change.positive {
+  color: var(--el-color-success);
+}
+
+.change.negative {
+  color: var(--el-color-danger);
 }
 </style> 

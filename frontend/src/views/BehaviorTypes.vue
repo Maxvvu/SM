@@ -12,8 +12,20 @@
         <el-table :data="violationTypes" style="width: 100%" v-loading="loading">
           <el-table-column prop="name" label="名称" />
           <el-table-column prop="description" label="描述" show-overflow-tooltip />
-          <el-table-column label="操作" width="120">
+          <el-table-column prop="score" label="分数" width="120">
             <template #default="scope">
+              <el-tag :type="scope.row.score < 0 ? 'danger' : 'success'" size="small">
+                {{ scope.row.score }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="200">
+            <template #default="scope">
+              <el-button
+                size="small"
+                type="primary"
+                @click="handleEdit(scope.row)"
+              >编辑</el-button>
               <el-button
                 size="small"
                 type="danger"
@@ -28,8 +40,20 @@
         <el-table :data="excellentTypes" style="width: 100%" v-loading="loading">
           <el-table-column prop="name" label="名称" />
           <el-table-column prop="description" label="描述" show-overflow-tooltip />
-          <el-table-column label="操作" width="120">
+          <el-table-column prop="score" label="分数" width="120">
             <template #default="scope">
+              <el-tag :type="scope.row.score < 0 ? 'danger' : 'success'" size="small">
+                {{ scope.row.score }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="200">
+            <template #default="scope">
+              <el-button
+                size="small"
+                type="primary"
+                @click="handleEdit(scope.row)"
+              >编辑</el-button>
               <el-button
                 size="small"
                 type="danger"
@@ -41,10 +65,10 @@
       </el-tab-pane>
     </el-tabs>
 
-    <!-- 添加行为类型对话框 -->
+    <!-- 添加/编辑行为类型对话框 -->
     <el-dialog
       v-model="dialogVisible"
-      title="添加行为类型"
+      :title="form.id ? '编辑行为类型' : '添加行为类型'"
       width="500px"
     >
       <el-form :model="form" label-width="100px" :rules="rules" ref="formRef">
@@ -56,6 +80,16 @@
         </el-form-item>
         <el-form-item label="名称" prop="name">
           <el-input v-model="form.name" placeholder="请输入行为类型名称" />
+        </el-form-item>
+        <el-form-item label="分数" prop="score">
+          <el-input-number 
+            v-model="form.score" 
+            :min="-100"
+            :max="100"
+            :step="1"
+            style="width: 100%"
+            :placeholder="form.category === '违纪' ? '请输入扣分分数（负数）' : '请输入加分分数（正数）'"
+          />
         </el-form-item>
         <el-form-item label="描述" prop="description">
           <el-input
@@ -79,7 +113,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -91,9 +125,20 @@ const behaviorTypes = ref([])
 const formRef = ref(null)
 
 const form = ref({
+  id: null,
   category: '',
   name: '',
-  description: ''
+  description: '',
+  score: 0
+})
+
+// 监听类别变化，自动调整分数范围
+watch(() => form.value.category, (newCategory) => {
+  if (newCategory === '违纪') {
+    if (form.value.score > 0) form.value.score = -form.value.score
+  } else {
+    if (form.value.score < 0) form.value.score = -form.value.score
+  }
 })
 
 const rules = {
@@ -107,6 +152,21 @@ const rules = {
   description: [
     { required: true, message: '请输入描述', trigger: 'blur' },
     { max: 100, message: '最多输入100个字符', trigger: 'blur' }
+  ],
+  score: [
+    { required: true, message: '请输入分数', trigger: 'blur' },
+    { 
+      validator: (rule, value, callback) => {
+        if (form.value.category === '违纪' && value >= 0) {
+          callback(new Error('违纪行为分数必须为负数'))
+        } else if (form.value.category === '优秀' && value <= 0) {
+          callback(new Error('优秀表现分数必须为正数'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
   ]
 }
 
@@ -136,9 +196,23 @@ const fetchBehaviorTypes = async () => {
 // 添加行为类型
 const handleAdd = () => {
   form.value = {
+    id: null,
     category: activeTab.value,
     name: '',
-    description: ''
+    description: '',
+    score: activeTab.value === '违纪' ? -1 : 1
+  }
+  dialogVisible.value = true
+}
+
+// 编辑行为类型
+const handleEdit = (row) => {
+  form.value = {
+    id: row.id,
+    category: row.category,
+    name: row.name,
+    description: row.description,
+    score: row.score
   }
   dialogVisible.value = true
 }
@@ -151,17 +225,23 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     
     submitting.value = true
-    await axios.post('/api/behaviorTypes', form.value)
-    
-    ElMessage.success('添加成功')
+    if (form.value.id) {
+      // 编辑
+      await axios.put(`/api/behaviorTypes/${form.value.id}`, form.value)
+      ElMessage.success('更新成功')
+    } else {
+      // 新增
+      await axios.post('/api/behaviorTypes', form.value)
+      ElMessage.success('添加成功')
+    }
     dialogVisible.value = false
     fetchBehaviorTypes()
   } catch (error) {
     if (error.response?.data?.message) {
       ElMessage.error(error.response.data.message)
     } else {
-      console.error('添加行为类型失败:', error)
-      ElMessage.error('添加失败')
+      console.error('操作失败:', error)
+      ElMessage.error('操作失败')
     }
   } finally {
     submitting.value = false
@@ -217,5 +297,9 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+:deep(.el-input-number .el-input__wrapper) {
+  width: 100%;
 }
 </style> 

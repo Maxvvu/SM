@@ -74,9 +74,11 @@ router.get('/', authenticateToken, async (req, res, next) => {
   try {
     const { student_id, behavior_type, start_date, end_date } = req.query;
     let query = `
-      SELECT b.*, s.name as student_name, s.grade, s.class, s.status as student_status
+      SELECT b.*, s.name as student_name, s.grade, s.class, s.status as student_status,
+             bt.score as behavior_score, bt.category as behavior_category
       FROM behaviors b
       JOIN students s ON b.student_id = s.id
+      JOIN behavior_types bt ON b.behavior_type = bt.name
       WHERE 1=1
     `;
     const params = [];
@@ -110,9 +112,11 @@ router.get('/', authenticateToken, async (req, res, next) => {
 router.get('/:id', authenticateToken, async (req, res, next) => {
   try {
     const [behavior] = await get(
-      `SELECT b.*, s.name as student_name, s.grade, s.class, s.status as student_status
+      `SELECT b.*, s.name as student_name, s.grade, s.class, s.status as student_status,
+              bt.score as behavior_score, bt.category as behavior_category
        FROM behaviors b
        JOIN students s ON b.student_id = s.id
+       JOIN behavior_types bt ON b.behavior_type = bt.name
        WHERE b.id = ?`,
       [req.params.id]
     );
