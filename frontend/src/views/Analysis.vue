@@ -35,10 +35,10 @@
           :disabled="!selectedGrade"
         >
           <el-option
-            v-for="classNum in classOptions"
-            :key="classNum"
-            :label="`${classNum}班`"
-            :value="classNum"
+            v-for="option in classOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
           />
         </el-select>
       </div>
@@ -226,6 +226,8 @@ const selectedGrade = ref('')
 const selectedClass = ref('')
 const analysisData = ref({})
 const classOptions = ref([])
+const gradeOptions = ref([{ value: '', label: '全部年级' }])
+const classInfo = ref({})
 
 // 日期快捷选项
 const dateShortcuts = [
@@ -793,7 +795,58 @@ const getViolationColor = (times) => {
   return colors[times] || colors[5]
 }
 
-// 获取分析数据
+// 获取年级和班级信息
+const fetchClassInfo = async () => {
+  try {
+    const response = await axios.get('/api/statistics/class-info')
+    classInfo.value = response.data
+    
+    // 更新年级选项
+    const grades = Object.keys(classInfo.value).map(grade => ({
+      value: grade,
+      label: grade
+    }))
+    gradeOptions.value = [{ value: '', label: '全部年级' }, ...grades]
+    
+    // 如果当前选中的年级不在可选范围内，清空选择
+    if (selectedGrade.value && !classInfo.value[selectedGrade.value]) {
+      selectedGrade.value = ''
+      selectedClass.value = ''
+    }
+    
+    // 更新班级选项
+    updateClassOptions()
+  } catch (error) {
+    console.error('获取年级和班级信息失败:', error)
+    ElMessage.error('获取年级和班级信息失败')
+  }
+}
+
+// 更新班级选项
+const updateClassOptions = () => {
+  if (selectedGrade.value && classInfo.value[selectedGrade.value]) {
+    classOptions.value = classInfo.value[selectedGrade.value].map(classNum => ({
+      value: classNum,
+      label: `${classNum}班`
+    }))
+  } else {
+    classOptions.value = []
+    selectedClass.value = ''
+  }
+}
+
+// 处理年级变化
+const handleGradeChange = () => {
+  updateClassOptions()
+  fetchAnalysisData()
+}
+
+// 处理班级变化
+const handleClassChange = () => {
+  fetchAnalysisData()
+}
+
+// 更新获取分析数据的函数
 const fetchAnalysisData = async () => {
   try {
     const params = {}
@@ -816,49 +869,21 @@ const fetchAnalysisData = async () => {
   }
 }
 
-// 处理日期变化
-const handleDateChange = () => {
-  fetchAnalysisData()
-}
-
-// 处理年级选择变化
-const handleGradeChange = () => {
-  updateClassOptions()
-  fetchAnalysisData()
-}
-
-// 处理班级选择变化
-const handleClassChange = () => {
-  fetchAnalysisData()
-}
-
-// 组件挂载时获取数据
-onMounted(() => {
-  fetchAnalysisData()
-})
-
-// 更新班级选项
-const updateClassOptions = () => {
-  if (selectedGrade.value) {
-    // 生成1-20的班级选项
-    classOptions.value = Array.from({ length: 20 }, (_, i) => i + 1)
-  } else {
-    classOptions.value = []
-    selectedClass.value = ''
-  }
-}
-
 // 监听年级变化
 watch(selectedGrade, () => {
   updateClassOptions()
 })
 
-const gradeOptions = [
-  { value: '', label: '全部年级' },
-  { value: '高一', label: '高一' },
-  { value: '高二', label: '高二' },
-  { value: '高三', label: '高三' }
-]
+// 组件挂载时获取数据
+onMounted(() => {
+  fetchClassInfo()
+  fetchAnalysisData()
+})
+
+// 处理日期变化
+const handleDateChange = () => {
+  fetchAnalysisData()
+}
 </script>
 
 <style scoped>

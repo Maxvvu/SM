@@ -775,6 +775,53 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
   }
 });
 
+// 获取年级和班级信息
+router.get('/class-info', authenticateToken, async (req, res, next) => {
+  try {
+    console.info('=== 开始获取年级和班级信息 ===');
+
+    // 获取所有年级和班级信息
+    const query = `
+      SELECT DISTINCT 
+        grade,
+        class
+      FROM students
+      WHERE grade IN ('高一', '高二', '高三')
+      ORDER BY 
+        CASE grade
+          WHEN '高一' THEN 1
+          WHEN '高二' THEN 2
+          WHEN '高三' THEN 3
+          ELSE 4
+        END,
+        class
+    `;
+
+    const results = await get(query);
+    
+    // 处理结果
+    const classInfo = results.reduce((acc, curr) => {
+      if (!acc[curr.grade]) {
+        acc[curr.grade] = [];
+      }
+      acc[curr.grade].push(curr.class);
+      return acc;
+    }, {});
+
+    console.info('年级和班级信息获取成功:', classInfo);
+    res.json(classInfo);
+
+  } catch (error) {
+    console.error('获取年级和班级信息失败:', {
+      message: error.message,
+      stack: error.stack,
+      sql: error.sql,
+      sqlMessage: error.sqlMessage
+    });
+    next(error);
+  }
+});
+
 // 辅助函数：验证日期格式
 function isValidDate(dateString) {
   const date = new Date(dateString);
