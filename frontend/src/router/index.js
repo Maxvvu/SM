@@ -49,7 +49,10 @@ const routes = [
         path: 'analysis',
         name: 'Analysis',
         component: () => import('../views/Analysis.vue'),
-        meta: { requiresAuth: true }
+        meta: {
+          requiresAuth: true,
+          title: '数据分析'
+        }
       },
       {
         path: 'reports',

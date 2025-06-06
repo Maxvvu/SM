@@ -405,11 +405,12 @@ router.get('/summary', authenticateToken, async (req, res, next) => {
 router.get('/analysis', authenticateToken, async (req, res, next) => {
   try {
     console.info('=== 开始获取统计分析数据 ===');
-    const { grade, start_date, end_date } = req.query;
-    console.info('接收到的请求参数:', {
-      grade,
+    const { start_date, end_date, grade, class: classNum } = req.query;
+    console.info('请求参数:', {
       start_date,
       end_date,
+      grade,
+      class: classNum,
       headers: req.headers,
       url: req.url
     });
@@ -417,21 +418,52 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
     const params = [];
     let dateCondition = '';
     let gradeCondition = '';
+    let classCondition = '';
 
-    if (start_date) {
+    // 日期条件处理
+    if (start_date && isValidDate(start_date)) {
       dateCondition += ' AND b.date >= ?';
       params.push(start_date);
     }
-    if (end_date) {
+    if (end_date && isValidDate(end_date)) {
       dateCondition += ' AND b.date <= ?';
       params.push(end_date);
     }
-    if (grade) {
+
+    // 年级条件处理
+    if (grade && ['高一', '高二', '高三'].includes(grade)) {
       gradeCondition = ' AND s.grade = ?';
       params.push(grade);
     }
 
-    // 获取各年级违纪率数据
+    // 班级条件处理
+    if (classNum && !isNaN(classNum) && parseInt(classNum) > 0) {
+      classCondition = ' AND s.class = ?';
+      params.push(parseInt(classNum));
+    }
+
+    console.info('SQL条件参数:', {
+      dateCondition,
+      gradeCondition,
+      classCondition,
+      params
+    });
+
+    // 获取总体统计数据
+    const totalStatsQuery = `
+      SELECT 
+        COUNT(DISTINCT s.id) as total_students,
+        COUNT(DISTINCT CASE WHEN bt.category = '违纪' THEN b.student_id END) as violation_students,
+        COUNT(CASE WHEN bt.category = '违纪' THEN b.id END) as total_violations,
+        ROUND(COALESCE(COUNT(DISTINCT CASE WHEN bt.category = '违纪' THEN b.student_id END) * 100.0 / 
+          NULLIF(COUNT(DISTINCT s.id), 0), 0), 2) as total_violation_rate
+      FROM students s
+      LEFT JOIN behaviors b ON s.id = b.student_id ${dateCondition}
+      LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
+      WHERE s.grade IN ('高一', '高二', '高三') ${gradeCondition} ${classCondition}
+    `;
+
+    // 获取年级违纪率数据
     const violationRateQuery = `
       WITH GradeStats AS (
         SELECT 
@@ -439,9 +471,9 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
           COUNT(DISTINCT s.id) as total_students,
           COUNT(DISTINCT CASE WHEN bt.category = '违纪' THEN b.student_id END) as violation_students
         FROM students s
-        LEFT JOIN behaviors b ON s.id = b.student_id AND 1=1 ${dateCondition}
+        LEFT JOIN behaviors b ON s.id = b.student_id ${dateCondition}
         LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
-        WHERE s.grade IN ('高一', '高二', '高三') ${gradeCondition}
+        WHERE s.grade IN ('高一', '高二', '高三') ${gradeCondition} ${classCondition}
         GROUP BY s.grade
       )
       SELECT 
@@ -459,6 +491,42 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
         END
     `;
 
+    // 获取班级违纪情况分析
+    const classViolationQuery = `
+      WITH ClassStats AS (
+        SELECT 
+          s.grade,
+          s.class,
+          COUNT(DISTINCT s.id) as total_students,
+          COUNT(DISTINCT CASE WHEN bt.category = '违纪' THEN b.student_id END) as violation_students,
+          COUNT(CASE WHEN bt.category = '违纪' THEN b.id END) as violation_count,
+          GROUP_CONCAT(DISTINCT CASE WHEN bt.category = '违纪' THEN bt.name END) as violation_types
+        FROM students s
+        LEFT JOIN behaviors b ON s.id = b.student_id ${dateCondition}
+        LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
+        WHERE s.grade IN ('高一', '高二', '高三') ${gradeCondition} ${classCondition}
+        GROUP BY s.grade, s.class
+      )
+      SELECT 
+        grade,
+        class,
+        total_students,
+        violation_students,
+        violation_count,
+        ROUND(COALESCE(violation_students * 100.0 / NULLIF(total_students, 0), 0), 2) as violation_rate,
+        ROUND(COALESCE(violation_count * 1.0 / NULLIF(violation_students, 0), 0), 2) as avg_violations_per_student,
+        violation_types
+      FROM ClassStats
+      ORDER BY 
+        CASE grade
+          WHEN '高一' THEN 1
+          WHEN '高二' THEN 2
+          WHEN '高三' THEN 3
+          ELSE 4
+        END,
+        violation_count DESC
+    `;
+
     // 获取月度违纪率趋势
     const monthlyTrendQuery = `
       WITH MonthlyStats AS (
@@ -467,9 +535,9 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
           COUNT(DISTINCT s.id) as total_students,
           COUNT(DISTINCT CASE WHEN bt.category = '违纪' THEN b.student_id END) as violation_students
         FROM students s
-        LEFT JOIN behaviors b ON s.id = b.student_id AND 1=1 ${dateCondition}
+        LEFT JOIN behaviors b ON s.id = b.student_id ${dateCondition}
         LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
-        WHERE s.grade IN ('高一', '高二', '高三') ${gradeCondition}
+        WHERE s.grade IN ('高一', '高二', '高三') ${gradeCondition} ${classCondition}
         GROUP BY strftime('%Y-%m', COALESCE(b.date, date('now')))
       )
       SELECT 
@@ -481,38 +549,218 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
       ORDER BY month
     `;
 
-    // 获取总体违纪率
-    const totalStatsQuery = `
-      SELECT 
-        COUNT(DISTINCT s.id) as total_students,
-        COUNT(DISTINCT CASE WHEN bt.category = '违纪' THEN b.student_id END) as violation_students,
-        ROUND(COALESCE(COUNT(DISTINCT CASE WHEN bt.category = '违纪' THEN b.student_id END) * 100.0 / 
-          NULLIF(COUNT(DISTINCT s.id), 0), 0), 2) as total_violation_rate
-      FROM students s
-      LEFT JOIN behaviors b ON s.id = b.student_id AND 1=1 ${dateCondition}
-      LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
-      WHERE s.grade IN ('高一', '高二', '高三') ${gradeCondition}
-    `;
-
     // 执行查询
-    const [violationRates, monthlyTrends, totalStats] = await Promise.all([
-      get(violationRateQuery, params),
-      get(monthlyTrendQuery, params),
-      get(totalStatsQuery, params)
-    ]);
+    try {
+      // 获取违纪类型趋势数据
+      const violationTypeTrendQuery = `
+        SELECT 
+          strftime('%Y-%m', b.date) as month,
+          b.behavior_type as type,
+          COUNT(*) as count
+        FROM behaviors b
+        JOIN students s ON b.student_id = s.id
+        JOIN behavior_types bt ON b.behavior_type = bt.name
+        WHERE bt.category = '违纪' 
+          AND s.grade IN ('高一', '高二', '高三') 
+          ${dateCondition} ${gradeCondition} ${classCondition}
+        GROUP BY strftime('%Y-%m', b.date), b.behavior_type
+        ORDER BY month, type
+      `;
 
-    // 准备返回数据
-    const responseData = {
-      totalStudents: totalStats[0].total_students,
-      totalViolationStudents: totalStats[0].violation_students,
-      totalViolationRate: totalStats[0].total_violation_rate,
-      gradeViolationRates: violationRates,
-      monthlyTrends: monthlyTrends
-    };
+      // 获取学生违纪频次分布
+      const studentViolationDistQuery = `
+        WITH StudentViolations AS (
+          SELECT 
+            s.id as student_id,
+            COUNT(b.id) as violation_times
+          FROM students s
+          LEFT JOIN behaviors b ON s.id = b.student_id
+          LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
+          WHERE s.grade IN ('高一', '高二', '高三')
+            AND (bt.category = '违纪' OR bt.category IS NULL)
+            ${dateCondition} ${gradeCondition} ${classCondition}
+          GROUP BY s.id
+        )
+        SELECT 
+          CASE 
+            WHEN violation_times >= 5 THEN 5
+            ELSE violation_times 
+          END as times,
+          COUNT(*) as count
+        FROM StudentViolations
+        GROUP BY 
+          CASE 
+            WHEN violation_times >= 5 THEN 5
+            ELSE violation_times 
+          END
+        ORDER BY times
+      `;
 
-    console.info('准备返回的数据:', responseData);
-    res.json(responseData);
-    console.info('=== 统计分析数据获取完成 ===');
+      // 获取违纪时段分布
+      const timeDistributionQuery = `
+        SELECT 
+          CASE 
+            WHEN strftime('%H', b.date) BETWEEN '06' AND '12' THEN 'morning'
+            WHEN strftime('%H', b.date) BETWEEN '12' AND '18' THEN 'afternoon'
+            ELSE 'evening'
+          END as time_period,
+          COUNT(*) as count
+        FROM behaviors b
+        JOIN behavior_types bt ON b.behavior_type = bt.name
+        JOIN students s ON b.student_id = s.id
+        WHERE bt.category = '违纪' 
+          AND s.grade IN ('高一', '高二', '高三')
+          ${dateCondition} ${gradeCondition} ${classCondition}
+        GROUP BY 
+          CASE 
+            WHEN strftime('%H', b.date) BETWEEN '06' AND '12' THEN 'morning'
+            WHEN strftime('%H', b.date) BETWEEN '12' AND '18' THEN 'afternoon'
+            ELSE 'evening'
+          END
+      `;
+
+      // 获取违纪原因分析
+      const reasonAnalysisQuery = `
+        SELECT 
+          b.behavior_type as reason,
+          COUNT(*) as count
+        FROM behaviors b
+        JOIN behavior_types bt ON b.behavior_type = bt.name
+        JOIN students s ON b.student_id = s.id
+        WHERE bt.category = '违纪' 
+          AND s.grade IN ('高一', '高二', '高三')
+          ${dateCondition} ${gradeCondition} ${classCondition}
+        GROUP BY b.behavior_type
+        ORDER BY count DESC
+        LIMIT 10
+      `;
+
+      // 执行所有查询
+      console.info('开始执行查询...');
+      
+      const results = await Promise.all([
+        get(totalStatsQuery, params).catch(err => {
+          console.error('总体统计查询失败:', err);
+          return [{}];
+        }),
+        get(violationRateQuery, params).catch(err => {
+          console.error('违纪率查询失败:', err);
+          return [];
+        }),
+        get(classViolationQuery, params).catch(err => {
+          console.error('班级违纪查询失败:', err);
+          return [];
+        }),
+        get(monthlyTrendQuery, params).catch(err => {
+          console.error('月度趋势查询失败:', err);
+          return [];
+        }),
+        get(violationTypeTrendQuery, params).catch(err => {
+          console.error('违纪类型趋势查询失败:', err);
+          return [];
+        }),
+        get(studentViolationDistQuery, params).catch(err => {
+          console.error('学生违纪频次查询失败:', err);
+          return [];
+        }),
+        get(timeDistributionQuery, params).catch(err => {
+          console.error('时段分布查询失败:', err);
+          return [];
+        }),
+        get(reasonAnalysisQuery, params).catch(err => {
+          console.error('原因分析查询失败:', err);
+          return [];
+        })
+      ]);
+
+      const [
+        totalStats,
+        violationRates,
+        classViolations,
+        monthlyTrends,
+        violationTypeTrends,
+        studentViolationDist,
+        timeDistribution,
+        reasonAnalysis
+      ] = results;
+
+      console.info('所有查询执行完成');
+
+      // 处理时段分布数据
+      const timeDistObj = timeDistribution.reduce((acc, curr) => {
+        acc[curr.time_period] = curr.count;
+        return acc;
+      }, {});
+
+      // 处理班级违纪数据分析
+      const classAnalysis = {
+        summary: {
+          total_classes: classViolations.length,
+          classes_with_violations: classViolations.filter(c => c.violation_count > 0).length,
+          highest_violation_rate: Math.max(...classViolations.map(c => c.violation_rate || 0)),
+          lowest_violation_rate: Math.min(...classViolations.map(c => c.violation_rate || 0))
+        },
+        by_grade: {},
+        rankings: {
+          top_violation_rate: classViolations
+            .sort((a, b) => (b.violation_rate || 0) - (a.violation_rate || 0))
+            .slice(0, 5),
+          top_violation_count: classViolations
+            .sort((a, b) => (b.violation_count || 0) - (a.violation_count || 0))
+            .slice(0, 5)
+        }
+      };
+
+      // 按年级分组统计
+      classViolations.forEach(cls => {
+        if (!classAnalysis.by_grade[cls.grade]) {
+          classAnalysis.by_grade[cls.grade] = {
+            classes: [],
+            avg_violation_rate: 0,
+            total_violations: 0
+          };
+        }
+        classAnalysis.by_grade[cls.grade].classes.push(cls);
+        classAnalysis.by_grade[cls.grade].total_violations += cls.violation_count || 0;
+      });
+
+      // 计算每个年级的平均违纪率
+      Object.keys(classAnalysis.by_grade).forEach(grade => {
+        const gradeData = classAnalysis.by_grade[grade];
+        gradeData.avg_violation_rate = gradeData.classes.reduce((sum, cls) => sum + (cls.violation_rate || 0), 0) / gradeData.classes.length;
+      });
+
+      // 准备返回数据
+      const responseData = {
+        totalStudents: totalStats[0]?.total_students || 0,
+        totalViolationStudents: totalStats[0]?.violation_students || 0,
+        totalViolations: totalStats[0]?.total_violations || 0,
+        totalViolationRate: totalStats[0]?.total_violation_rate || 0,
+        gradeViolationRates: violationRates,
+        monthlyTrends: monthlyTrends,
+        classAnalysis: classAnalysis,
+        // 添加其他分析数据
+        violationTypeTrends: violationTypeTrends,
+        studentViolationDist: studentViolationDist,
+        timeDistribution: {
+          morning: timeDistObj.morning || 0,
+          afternoon: timeDistObj.afternoon || 0,
+          evening: timeDistObj.evening || 0
+        },
+        reasonAnalysis: reasonAnalysis
+      };
+
+      console.info('数据处理完成，准备返回');
+      res.json(responseData);
+    } catch (error) {
+      console.error('统计分析失败:', {
+        message: error.message,
+        stack: error.stack,
+        sql: error.sql,
+        sqlMessage: error.sqlMessage
+      });
+      next(error);
+    }
 
   } catch (err) {
     console.error('获取统计数据失败:', {
