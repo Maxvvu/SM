@@ -569,31 +569,45 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
 
       // 获取学生违纪频次分布
       const studentViolationDistQuery = `
-        WITH StudentViolations AS (
-          SELECT 
-            s.id as student_id,
-            COUNT(b.id) as violation_times
+        WITH FilteredStudents AS (
+          -- 首先获取符合筛选条件的学生
+          SELECT s.id
           FROM students s
-          LEFT JOIN behaviors b ON s.id = b.student_id
+          WHERE 1=1 ${gradeCondition} ${classCondition}
+        ),
+        ViolationCounts AS (
+          -- 统计每个学生的违纪次数
+          SELECT 
+            fs.id as student_id,
+            COUNT(CASE WHEN bt.category = '违纪' THEN b.id END) as violation_times
+          FROM FilteredStudents fs
+          LEFT JOIN behaviors b ON fs.id = b.student_id ${dateCondition}
           LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
-          WHERE s.grade IN ('高一', '高二', '高三')
-            AND (bt.category = '违纪' OR bt.category IS NULL)
-            ${dateCondition} ${gradeCondition} ${classCondition}
-          GROUP BY s.id
+          GROUP BY fs.id
+        ),
+        FrequencyGroups AS (
+          -- 按违纪次数分组统计
+          SELECT
+            CASE 
+              WHEN violation_times >= 5 THEN 5
+              ELSE violation_times 
+            END as times,
+            COUNT(*) as count
+          FROM ViolationCounts
+          GROUP BY 
+            CASE 
+              WHEN violation_times >= 5 THEN 5
+              ELSE violation_times 
+            END
         )
         SELECT 
-          CASE 
-            WHEN violation_times >= 5 THEN 5
-            ELSE violation_times 
-          END as times,
-          COUNT(*) as count
-        FROM StudentViolations
-        GROUP BY 
-          CASE 
-            WHEN violation_times >= 5 THEN 5
-            ELSE violation_times 
-          END
-        ORDER BY times
+          fg.times,
+          fg.count,
+          ROUND(CAST(fg.count AS FLOAT) * 100.0 / (
+            SELECT COUNT(*) FROM FilteredStudents
+          ), 2) as percentage
+        FROM FrequencyGroups fg
+        ORDER BY fg.times
       `;
 
       // 获取违纪时段分布
@@ -635,6 +649,30 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
         LIMIT 10
       `;
 
+      // 获取违纪类型分布
+      const violationTypeDistQuery = `
+        WITH TypeStats AS (
+          SELECT 
+            bt.name as type_name,
+            COUNT(*) as count
+          FROM behaviors b
+          JOIN behavior_types bt ON b.behavior_type = bt.name
+          JOIN students s ON b.student_id = s.id
+          WHERE bt.category = '违纪'
+            ${dateCondition} ${gradeCondition} ${classCondition}
+          GROUP BY bt.name
+        ),
+        TotalViolations AS (
+          SELECT SUM(count) as total FROM TypeStats
+        )
+        SELECT 
+          ts.type_name,
+          ts.count,
+          ROUND(CAST(ts.count AS FLOAT) * 100.0 / CAST((SELECT total FROM TotalViolations) AS FLOAT), 2) as percentage
+        FROM TypeStats ts
+        ORDER BY ts.count DESC
+      `;
+
       // 执行所有查询
       console.info('开始执行查询...');
       
@@ -670,6 +708,10 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
         get(reasonAnalysisQuery, params).catch(err => {
           console.error('原因分析查询失败:', err);
           return [];
+        }),
+        get(violationTypeDistQuery, params).catch(err => {
+          console.error('违纪类型分布查询失败:', err);
+          return [];
         })
       ]);
 
@@ -681,7 +723,8 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
         violationTypeTrends,
         studentViolationDist,
         timeDistribution,
-        reasonAnalysis
+        reasonAnalysis,
+        violationTypeDist
       ] = results;
 
       console.info('所有查询执行完成');
@@ -739,7 +782,6 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
         gradeViolationRates: violationRates,
         monthlyTrends: monthlyTrends,
         classAnalysis: classAnalysis,
-        // 添加其他分析数据
         violationTypeTrends: violationTypeTrends,
         studentViolationDist: studentViolationDist,
         timeDistribution: {
@@ -747,7 +789,8 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
           afternoon: timeDistObj.afternoon || 0,
           evening: timeDistObj.evening || 0
         },
-        reasonAnalysis: reasonAnalysis
+        reasonAnalysis: reasonAnalysis,
+        violationTypeDist: violationTypeDist
       };
 
       console.info('数据处理完成，准备返回');
@@ -780,11 +823,15 @@ router.get('/class-info', authenticateToken, async (req, res, next) => {
   try {
     console.info('=== 开始获取年级和班级信息 ===');
 
-    // 获取所有年级和班级信息
+    // 获取所有年级和班级信息，包括双优班
     const query = `
       SELECT DISTINCT 
         grade,
-        class
+        class as class_display,
+        CASE 
+          WHEN class = '双优' THEN '双优'
+          ELSE class
+        END as class_value
       FROM students
       WHERE grade IN ('高一', '高二', '高三')
       ORDER BY 
@@ -794,17 +841,25 @@ router.get('/class-info', authenticateToken, async (req, res, next) => {
           WHEN '高三' THEN 3
           ELSE 4
         END,
-        class
+        CASE 
+          WHEN class = '双优' THEN 0
+          ELSE CAST(class AS INTEGER)
+        END
     `;
 
     const results = await get(query);
+    console.info('查询结果:', results);
     
     // 处理结果
     const classInfo = results.reduce((acc, curr) => {
       if (!acc[curr.grade]) {
         acc[curr.grade] = [];
       }
-      acc[curr.grade].push(curr.class);
+      // 将班级信息转换为对象格式，包含显示值和实际值
+      acc[curr.grade].push({
+        label: curr.class_display,
+        value: curr.class_value
+      });
       return acc;
     }, {});
 

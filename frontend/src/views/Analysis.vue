@@ -72,7 +72,7 @@
                 <div class="stat-label">违纪总次数</div>
               </div>
             </el-col>
-            <el-col :span="6">
+      <el-col :span="6">
               <div class="stat-item">
                 <div class="stat-value">{{ analysisData.totalViolationRate || 0 }}%</div>
                 <div class="stat-label">总体违纪率</div>
@@ -286,16 +286,16 @@ const classRankingOption = computed(() => {
     },
     series: [
       {
-        type: 'bar',
+      type: 'bar',
         data: data.map(item => item.violation_rate),
         itemStyle: {
           color: '#FF6B6B'
         },
-        label: {
-          show: true,
-          position: 'top',
-          formatter: '{c}%'
-        }
+      label: {
+        show: true,
+        position: 'top',
+        formatter: '{c}%'
+      }
       }
     ]
   }
@@ -381,25 +381,25 @@ const trendOption = computed(() => {
     },
     series: [
       {
-        type: 'line',
+      type: 'line',
         data: trends.map(item => item.violation_rate),
-        itemStyle: {
+      itemStyle: {
           color: '#52C41A'
-        },
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
+      },
+      areaStyle: {
+        color: {
+          type: 'linear',
+          x: 0,
+          y: 0,
+          x2: 0,
+          y2: 1,
             colorStops: [
               {
-                offset: 0,
+            offset: 0,
                 color: 'rgba(82, 196, 26, 0.3)'
               },
               {
-                offset: 1,
+            offset: 1,
                 color: 'rgba(82, 196, 26, 0.1)'
               }
             ]
@@ -412,48 +412,73 @@ const trendOption = computed(() => {
 
 // 违纪类型分布图表配置
 const typeDistributionOption = computed(() => {
-  if (!analysisData.value?.classAnalysis?.rankings?.top_violation_count) {
+  if (!analysisData.value?.violationTypeDist) {
     return {}
   }
 
-  const data = analysisData.value.classAnalysis.rankings.top_violation_count
+  const data = analysisData.value.violationTypeDist
+  const colors = [
+    '#FF6B6B', '#FF8787', '#FFA5A5',  // 红色系
+    '#FF9F43', '#FFC069', '#FFE0B2',  // 橙色系
+    '#4ECDC4', '#45B7D1', '#96CEB4',  // 蓝绿色系
+    '#52C41A', '#73D13D', '#95DE64'   // 绿色系
+  ]
+
   return {
     tooltip: {
       trigger: 'item',
-      formatter: '{b}: {c} ({d}%)'
+      formatter: (params) => {
+        return `${params.name}<br/>` +
+               `次数：${params.value}次<br/>` +
+               `占比：${params.data.percentage}%`
+      }
     },
     legend: {
+      type: 'scroll',
       orient: 'vertical',
       right: 10,
-      top: 'center'
+      top: 'center',
+      formatter: (name) => {
+        const item = data.find(d => d.type_name === name)
+        return `${name} (${item ? item.count : 0}次)`
+      }
     },
     series: [
       {
         type: 'pie',
         radius: ['40%', '70%'],
-        avoidLabelOverlap: false,
+        avoidLabelOverlap: true,
         itemStyle: {
           borderRadius: 10,
           borderColor: '#fff',
           borderWidth: 2
         },
         label: {
-          show: false,
-          position: 'center'
+          show: true,
+          position: 'outside',
+          formatter: (params) => {
+            return `${params.name}\n${params.percent}%`
+          }
         },
         emphasis: {
           label: {
             show: true,
-            fontSize: 20,
+            fontSize: 16,
             fontWeight: 'bold'
+          },
+          itemStyle: {
+            shadowBlur: 10,
+            shadowOffsetX: 0,
+            shadowColor: 'rgba(0, 0, 0, 0.5)'
           }
         },
-        labelLine: {
-          show: false
-        },
-        data: data.map(item => ({
-          name: `${item.grade}${item.class}班`,
-          value: item.violation_count
+        data: data.map((item, index) => ({
+          name: item.type_name,
+          value: item.count,
+          percentage: item.percentage,
+          itemStyle: {
+            color: colors[index % colors.length]
+          }
         }))
       }
     ]
@@ -517,11 +542,48 @@ const studentViolationDistOption = computed(() => {
   }
 
   const data = analysisData.value.studentViolationDist || []
+  console.log('违纪频次分布原始数据:', data)
+
+  // 确保所有频次都有数据
+  const frequencyMap = new Map(data.map(item => [item.times, item]))
+  const allFrequencies = [0, 1, 2, 3, 4, 5]
+  const completeData = allFrequencies.map(freq => {
+    const existingData = frequencyMap.get(freq) || { times: freq, count: 0, percentage: 0 }
+    return {
+      ...existingData,
+      count: Number(existingData.count || 0),
+      percentage: Number(existingData.percentage || 0)
+    }
+  })
+
+  // 验证数据
+  const totalStudents = completeData.reduce((sum, item) => sum + item.count, 0)
+  const totalPercentage = completeData.reduce((sum, item) => sum + item.percentage, 0)
+  console.log('违纪频次分布统计:', {
+    totalStudents,
+    totalPercentage: totalPercentage.toFixed(2) + '%',
+    data: completeData
+  })
+
+  // 如果总百分比有明显偏差，进行修正
+  if (Math.abs(totalPercentage - 100) > 0.1) {
+    console.warn('百分比总和不为100%，进行修正')
+    completeData.forEach(item => {
+      item.percentage = (item.count / totalStudents) * 100
+    })
+  }
+
   return {
     tooltip: {
       trigger: 'axis',
       axisPointer: {
         type: 'shadow'
+      },
+      formatter: (params) => {
+        const data = params[0].data
+        return `违纪${params[0].name}<br/>` +
+               `学生数：${data.value}人<br/>` +
+               `占比：${data.percentage.toFixed(2)}%`
       }
     },
     grid: {
@@ -532,27 +594,53 @@ const studentViolationDistOption = computed(() => {
     },
     xAxis: {
       type: 'category',
-      data: ['1次', '2次', '3次', '4次', '5次及以上'],
+      data: ['0次', '1次', '2次', '3次', '4次', '5次及以上'],
       axisLabel: {
         interval: 0
       }
     },
-    yAxis: {
-      type: 'value',
-      name: '学生数'
-    },
+    yAxis: [
+      {
+        type: 'value',
+        name: '学生数',
+        position: 'left',
+        axisLine: {
+          show: true
+        },
+        axisLabel: {
+          formatter: '{value}人'
+        }
+      },
+      {
+        type: 'value',
+        name: '占比',
+        position: 'right',
+        axisLine: {
+          show: true
+        },
+        axisLabel: {
+          formatter: '{value}%'
+        },
+        max: 100
+      }
+    ],
     series: [
       {
+        name: '违纪频次分布',
         type: 'bar',
-        data: data.map(item => ({
+        data: completeData.map(item => ({
           value: item.count,
+          percentage: Number(item.percentage.toFixed(2)),
           itemStyle: {
             color: getViolationColor(item.times)
           }
         })),
         label: {
           show: true,
-          position: 'top'
+          position: 'top',
+          formatter: (params) => {
+            return `${params.data.value}人\n${params.data.percentage}%`
+          }
         }
       }
     ]
@@ -619,8 +707,8 @@ const timeDistributionOption = computed(() => {
         fontWeight: 'normal'
       }
     },
-    series: [
-      {
+      series: [
+        {
         type: 'pie',
         radius: ['45%', '65%'], // 调小外圈半径
         center: ['50%', '50%'],
@@ -786,11 +874,12 @@ const reasonAnalysisOption = computed(() => {
 // 辅助函数：获取违纪次数对应的颜色
 const getViolationColor = (times) => {
   const colors = {
-    1: '#95DE64',  // 浅绿
-    2: '#FFB37B',  // 浅橙
-    3: '#FF9F43',  // 橙色
-    4: '#FF7875',  // 浅红
-    5: '#FF4D4F'   // 红色
+    0: '#95DE64',  // 浅绿 - 未违纪
+    1: '#FFB37B',  // 浅橙 - 轻微
+    2: '#FF9F43',  // 橙色 - 一般
+    3: '#FF7875',  // 浅红 - 较重
+    4: '#FF6B6B',  // 红色 - 严重
+    5: '#FF4D4F'   // 深红 - 非常严重
   }
   return colors[times] || colors[5]
 }
@@ -825,10 +914,15 @@ const fetchClassInfo = async () => {
 // 更新班级选项
 const updateClassOptions = () => {
   if (selectedGrade.value && classInfo.value[selectedGrade.value]) {
-    classOptions.value = classInfo.value[selectedGrade.value].map(classNum => ({
-      value: classNum,
-      label: `${classNum}班`
-    }))
+    classOptions.value = classInfo.value[selectedGrade.value].map(classInfo => ({
+      value: classInfo.value,
+      label: `${classInfo.label}班`
+    })).sort((a, b) => {
+      // 确保双优始终排在最前面
+      if (a.label === '双优班') return -1;
+      if (b.label === '双优班') return 1;
+      return parseInt(a.value) - parseInt(b.value);
+    });
   } else {
     classOptions.value = []
     selectedClass.value = ''
@@ -858,7 +952,8 @@ const fetchAnalysisData = async () => {
       params.grade = selectedGrade.value
     }
     if (selectedClass.value) {
-      params.class = selectedClass.value
+      // 从显示值中移除"班"字后传递给后端
+      params.class = selectedClass.value.replace('班', '')
     }
 
     const response = await axios.get('/api/statistics/analysis', { params })
