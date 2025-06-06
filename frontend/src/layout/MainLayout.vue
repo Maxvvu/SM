@@ -50,6 +50,11 @@
           <template #title>报表管理</template>
         </el-menu-item>
 
+        <el-menu-item index="/teachers">
+          <el-icon><User /></el-icon>
+          <template #title>教师管理</template>
+        </el-menu-item>
+
         <el-sub-menu index="system" v-if="isAdmin">
           <template #title>
             <el-icon><Setting /></el-icon>
@@ -198,6 +203,7 @@ const breadcrumbs = computed(() => {
       case 'behavior-types': return '行为类型管理'
       case 'analysis': return '数据分析'
       case 'reports': return '报表管理'
+      case 'teachers': return '教师管理'
       case 'system': return '系统设置'
       case 'account': return '账户管理'
       case 'logs': return '操作日志'

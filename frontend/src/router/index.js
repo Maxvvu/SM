@@ -75,6 +75,15 @@ const routes = [
             meta: { requiresAuth: true, requiresAdmin: true }
           }
         ]
+      },
+      {
+        path: 'teachers',
+        name: 'Teachers',
+        component: () => import('../views/Teachers.vue'),
+        meta: {
+          title: '教师管理',
+          requiresAuth: true
+        }
       }
     ]
   }
