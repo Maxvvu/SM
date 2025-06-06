@@ -553,7 +553,7 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
     try {
       // 获取违纪类型趋势数据
       const violationTypeTrendQuery = `
-        SELECT 
+      SELECT 
           strftime('%Y-%m', b.date) as month,
           b.behavior_type as type,
           COUNT(*) as count
@@ -572,7 +572,7 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
         WITH FilteredStudents AS (
           -- 首先获取符合筛选条件的学生
           SELECT s.id
-          FROM students s
+      FROM students s
           WHERE 1=1 ${gradeCondition} ${classCondition}
         ),
         ViolationCounts AS (
@@ -582,7 +582,7 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
             COUNT(CASE WHEN bt.category = '违纪' THEN b.id END) as violation_times
           FROM FilteredStudents fs
           LEFT JOIN behaviors b ON fs.id = b.student_id ${dateCondition}
-          LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
+      LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
           GROUP BY fs.id
         ),
         FrequencyGroups AS (
@@ -631,7 +631,7 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
             WHEN strftime('%H', b.date) BETWEEN '12' AND '18' THEN 'afternoon'
             ELSE 'evening'
           END
-      `;
+    `;
 
       // 获取违纪原因分析
       const reasonAnalysisQuery = `
@@ -773,13 +773,13 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
         gradeData.avg_violation_rate = gradeData.classes.reduce((sum, cls) => sum + (cls.violation_rate || 0), 0) / gradeData.classes.length;
       });
 
-      // 准备返回数据
-      const responseData = {
+    // 准备返回数据
+    const responseData = {
         totalStudents: totalStats[0]?.total_students || 0,
         totalViolationStudents: totalStats[0]?.violation_students || 0,
         totalViolations: totalStats[0]?.total_violations || 0,
         totalViolationRate: totalStats[0]?.total_violation_rate || 0,
-        gradeViolationRates: violationRates,
+      gradeViolationRates: violationRates,
         monthlyTrends: monthlyTrends,
         classAnalysis: classAnalysis,
         violationTypeTrends: violationTypeTrends,
@@ -791,10 +791,10 @@ router.get('/analysis', authenticateToken, async (req, res, next) => {
         },
         reasonAnalysis: reasonAnalysis,
         violationTypeDist: violationTypeDist
-      };
+    };
 
       console.info('数据处理完成，准备返回');
-      res.json(responseData);
+    res.json(responseData);
     } catch (error) {
       console.error('统计分析失败:', {
         message: error.message,
@@ -868,6 +868,120 @@ router.get('/class-info', authenticateToken, async (req, res, next) => {
 
   } catch (error) {
     console.error('获取年级和班级信息失败:', {
+      message: error.message,
+      stack: error.stack,
+      sql: error.sql,
+      sqlMessage: error.sqlMessage
+    });
+    next(error);
+  }
+});
+
+// 获取学生违纪高风险预警数据
+router.get('/risk-warning', authenticateToken, async (req, res, next) => {
+  try {
+    console.info('=== 开始获取学生违纪高风险预警数据 ===');
+    const { days = 30 } = req.query; // 默认分析最近30天的数据
+    console.info('分析天数:', days);
+
+    // 计算日期范围
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    const startDateStr = startDate.toISOString().split('T')[0];
+    console.info('开始日期:', startDateStr);
+
+    const riskWarningQuery = `
+      WITH RecentViolations AS (
+        SELECT 
+          s.id as student_id,
+          s.name,
+          s.grade,
+          s.class,
+          COUNT(*) as violation_count,
+          GROUP_CONCAT(b.behavior_type, ', ') as violation_types,
+          MAX(date(b.date)) as latest_violation_date,
+          ROUND(CAST(COUNT(*) AS FLOAT) * 30 / ? * 100, 2) as monthly_rate,
+          ? as days_range
+        FROM students s
+        JOIN behaviors b ON s.id = b.student_id
+        JOIN behavior_types bt ON b.behavior_type = bt.name
+        WHERE bt.category = '违纪'
+          AND date(b.date) >= date(?)
+        GROUP BY s.id, s.name, s.grade, s.class
+        HAVING 
+          CASE 
+            WHEN days_range = 7 THEN violation_count >= 2
+            WHEN days_range = 30 THEN violation_count >= 10
+            ELSE violation_count >= 2
+          END
+      )
+      SELECT 
+        rv.*,
+        CASE
+          WHEN days_range = 7 AND violation_count >= 5 THEN '高'
+          WHEN days_range = 7 AND violation_count >= 3 THEN '中'
+          WHEN days_range = 7 AND violation_count >= 2 THEN '低'
+          WHEN days_range = 30 AND violation_count >= 20 THEN '高'
+          WHEN days_range = 30 AND violation_count >= 15 THEN '中'
+          WHEN days_range = 30 AND violation_count >= 10 THEN '低'
+          ELSE '低'
+        END as risk_level
+      FROM RecentViolations rv
+      ORDER BY 
+        CASE risk_level
+          WHEN '高' THEN 1
+          WHEN '中' THEN 2
+          WHEN '低' THEN 3
+        END,
+        violation_count DESC,
+        latest_violation_date DESC
+      LIMIT 20
+    `;
+
+    const params = [days, days, startDateStr];
+    console.info('查询参数:', params);
+
+    // 执行查询
+    const riskWarningData = await get(riskWarningQuery, params);
+    console.info('查询结果数量:', riskWarningData.length);
+    
+    if (riskWarningData.length === 0) {
+      console.info('未找到符合条件的风险预警数据');
+      
+      // 执行诊断查询，检查基础数据
+      const diagnosticQuery = `
+        SELECT 
+          COUNT(*) as total_violations,
+          COUNT(DISTINCT b.student_id) as total_students,
+          MIN(date(b.date)) as earliest_date,
+          MAX(date(b.date)) as latest_date
+        FROM behaviors b
+        JOIN behavior_types bt ON b.behavior_type = bt.name
+        WHERE bt.category = '违纪'
+      `;
+      
+      const [diagnosticData] = await get(diagnosticQuery);
+      console.info('诊断数据:', diagnosticData);
+    }
+
+    // 为每个学生添加风险等级对应的样式
+    const riskWarningWithStyles = riskWarningData.map(student => ({
+      ...student,
+      risk_style: {
+        color: student.risk_level === '高' ? '#FF4D4F' :
+               student.risk_level === '中' ? '#FAAD14' : '#52C41A',
+        backgroundColor: student.risk_level === '高' ? '#FFF1F0' :
+                        student.risk_level === '中' ? '#FFF7E6' : '#F6FFED'
+      }
+    }));
+
+    console.info('处理后的数据示例:', 
+      riskWarningWithStyles.length > 0 ? riskWarningWithStyles[0] : '无数据');
+    
+    res.json(riskWarningWithStyles);
+
+  } catch (error) {
+    console.error('获取风险预警数据失败:', {
       message: error.message,
       stack: error.stack,
       sql: error.sql,

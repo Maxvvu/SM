@@ -192,6 +192,186 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- 风险预警组件 -->
+    <el-row :gutter="20" class="chart-row">
+      <el-col :span="24">
+        <el-card class="chart-card risk-warning-card" shadow="hover">
+          <template #header>
+            <div class="card-header risk-warning-header">
+              <div class="header-left">
+                <el-icon class="warning-icon"><warning-filled /></el-icon>
+                <span class="title">学生违纪高风险预警</span>
+                <el-tag 
+                  type="danger" 
+                  effect="dark" 
+                  size="small" 
+                  class="warning-count"
+                  v-if="riskWarningData.length"
+                >
+                  {{ riskWarningData.length }}人
+                </el-tag>
+              </div>
+              <div class="header-right">
+                <el-radio-group 
+                  v-model="riskDays" 
+                  size="small" 
+                  @change="fetchRiskWarningData"
+                  class="time-selector"
+                >
+                  <el-radio-button label="7">最近7天</el-radio-button>
+                  <el-radio-button label="30">最近30天</el-radio-button>
+                  <el-radio-button label="90">最近90天</el-radio-button>
+                </el-radio-group>
+              </div>
+            </div>
+          </template>
+          <div class="risk-warning-container">
+            <!-- 图表部分 -->
+            <div class="risk-chart-section" v-show="riskWarningData.length > 0">
+              <div class="chart-header">
+                <h4 class="section-title">风险学生TOP10</h4>
+                <div class="chart-legend">
+                  <span class="legend-item">
+                    <span class="legend-dot high"></span>
+                    高风险 ({{ riskDays === '7' ? '≥5次/周' : '≥20次/月' }})
+                  </span>
+                  <span class="legend-item">
+                    <span class="legend-dot medium"></span>
+                    中风险 ({{ riskDays === '7' ? '≥3次/周' : '≥15次/月' }})
+                  </span>
+                  <span class="legend-item">
+                    <span class="legend-dot low"></span>
+                    低风险 ({{ riskDays === '7' ? '≥2次/周' : '≥10次/月' }})
+                  </span>
+                </div>
+              </div>
+              <div class="risk-chart">
+                <VChart :option="riskWarningOption" autoresize />
+              </div>
+            </div>
+
+            <!-- 表格部分 -->
+            <div class="risk-list-section" v-loading="riskLoading">
+              <div class="list-header">
+                <h4 class="section-title">详细数据</h4>
+                <el-button 
+                  type="primary" 
+                  size="small" 
+                  :icon="Download"
+                  @click="exportRiskData"
+                >
+                  导出数据
+                </el-button>
+              </div>
+              <el-empty 
+                v-if="!riskWarningData.length" 
+                description="暂无风险预警数据"
+                class="custom-empty"
+              >
+                <template #image>
+                  <el-icon class="empty-icon"><warning /></el-icon>
+                </template>
+                <template #description>
+                  <div class="empty-text">
+                    <p>暂无风险预警数据</p>
+                    <small class="sub-text">所选时间范围内未发现高风险违纪行为</small>
+                  </div>
+                </template>
+              </el-empty>
+              <el-table 
+                v-else
+                :data="riskWarningData" 
+                style="width: 100%"
+                :header-cell-style="{ background: '#f5f7fa' }"
+                border
+                stripe
+                highlight-current-row
+                class="risk-table"
+              >
+                <el-table-column prop="name" label="学生姓名" width="100" fixed>
+                  <template #default="{ row }">
+                    <span class="student-name">{{ row.name }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="grade" label="年级" width="80" />
+                <el-table-column prop="class" label="班级" width="80">
+                  <template #default="{ row }">
+                    {{ row.class }}班
+                  </template>
+                </el-table-column>
+                <el-table-column prop="violation_count" label="违纪次数" width="100">
+                  <template #default="{ row }">
+                    <el-badge 
+                      :value="row.violation_count" 
+                      :type="row.risk_level === '高' ? 'danger' : row.risk_level === '中' ? 'warning' : 'info'"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="monthly_rate" label="月度频率" width="120">
+                  <template #default="{ row }">
+                    <div class="rate-box">
+                      <span class="rate-value">{{ row.monthly_rate }}%</span>
+                      <el-progress 
+                        :percentage="getProgressPercentage(row)"
+                        :status="row.risk_level === '高' ? 'exception' : row.risk_level === '中' ? 'warning' : 'success'"
+                        :stroke-width="8"
+                        class="rate-progress"
+                      />
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="latest_violation_date" label="最近违纪日期" width="120">
+                  <template #default="{ row }">
+                    <el-tooltip 
+                      :content="'距今: ' + getDaysDiff(row.latest_violation_date) + '天'"
+                      placement="top"
+                    >
+                      <span class="date-text">{{ formatDate(row.latest_violation_date) }}</span>
+                    </el-tooltip>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="risk_level" label="风险等级" width="120">
+                  <template #default="{ row }">
+                    <div class="risk-level-box">
+                      <el-tag
+                        :type="row.risk_level === '高' ? 'danger' : row.risk_level === '中' ? 'warning' : 'success'"
+                        effect="light"
+                        class="risk-tag"
+                      >
+                        <el-icon class="risk-icon"><warning /></el-icon>
+                        {{ row.risk_level }}级风险
+                      </el-tag>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="violation_types" label="违纪类型" min-width="200">
+                  <template #default="{ row }">
+                    <el-tooltip
+                      :content="row.violation_types"
+                      placement="top"
+                      :show-after="200"
+                    >
+                      <div class="violation-types">
+                        <el-tag
+                          v-for="(type, index) in row.violation_types.split(', ')"
+                          :key="index"
+                          size="small"
+                          class="type-tag"
+                          :style="getTypeTagStyle(index)"
+                        >
+                          {{ type }}
+                        </el-tag>
+                      </div>
+                    </el-tooltip>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -209,6 +389,7 @@ import {
 import VChart from 'vue-echarts'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { Warning, WarningFilled, Download } from '@element-plus/icons-vue'
 
 use([
   CanvasRenderer,
@@ -979,6 +1160,169 @@ onMounted(() => {
 const handleDateChange = () => {
   fetchAnalysisData()
 }
+
+// 风险预警相关数据
+const riskDays = ref('30')
+const riskWarningData = ref([])
+const riskLoading = ref(false)
+
+// 格式化日期
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+// 获取风险预警数据
+const fetchRiskWarningData = async () => {
+  riskLoading.value = true
+  try {
+    const response = await axios.get('/api/statistics/risk-warning', {
+      params: { 
+        days: riskDays.value,
+        grade: selectedGrade.value,
+        class: selectedClass.value
+      }
+    })
+    riskWarningData.value = response.data
+    console.log('风险预警数据:', response.data)
+  } catch (error) {
+    console.error('获取风险预警数据失败:', error)
+    ElMessage.error('获取风险预警数据失败')
+    riskWarningData.value = []
+  } finally {
+    riskLoading.value = false
+  }
+}
+
+// 风险预警图表配置
+const riskWarningOption = computed(() => {
+  if (!riskWarningData.value.length) return {}
+
+  const data = riskWarningData.value.slice(0, 10)
+  return {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow'
+      },
+      formatter: (params) => {
+        const data = params[0]
+        const row = riskWarningData.value[data.dataIndex]
+        const timeRange = riskDays.value === '7' ? '周' : '月'
+        return `${data.name}<br/>
+                违纪次数: ${row.violation_count}次/${timeRange}<br/>
+                风险等级: ${row.risk_level}级<br/>
+                最近违纪: ${formatDate(row.latest_violation_date)}`
+      }
+    },
+    grid: {
+      top: '5%',
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: data.map(item => `${item.name}\n(${item.grade}${item.class}班)`),
+      axisLabel: {
+        interval: 0,
+        formatter: (value) => {
+          const lines = value.split('\n')
+          return lines.map(line => {
+            return line.length > 8 ? line.substring(0, 8) + '...' : line
+          }).join('\n')
+        }
+      }
+    },
+    yAxis: {
+      type: 'value',
+      name: '月度违纪频率(%)',
+      nameTextStyle: {
+        padding: [0, 0, 0, 30]
+      }
+    },
+    series: [
+      {
+        name: '违纪次数',
+        type: 'bar',
+        barWidth: '40%',
+        data: data.map(item => ({
+          value: item.violation_count,
+          itemStyle: {
+            color: item.risk_level === '高' ? '#FF4D4F' :
+                   item.risk_level === '中' ? '#FAAD14' : '#52C41A'
+          }
+        })),
+        label: {
+          show: true,
+          position: 'top',
+          formatter: '{c}次',
+          fontSize: 12
+        }
+      }
+    ]
+  }
+})
+
+// 监听日期范围变化
+watch([dateRange, selectedGrade, selectedClass], () => {
+  fetchRiskWarningData()
+})
+
+// 获取违纪类型标签样式
+const getTypeTagStyle = (index) => {
+  const colors = [
+    { color: '#FF4D4F', backgroundColor: '#FFF1F0' },
+    { color: '#FAAD14', backgroundColor: '#FFF7E6' },
+    { color: '#52C41A', backgroundColor: '#F6FFED' },
+    { color: '#1890FF', backgroundColor: '#E6F7FF' },
+    { color: '#722ED1', backgroundColor: '#F9F0FF' }
+  ]
+  return colors[index % colors.length]
+}
+
+// 计算距今天数
+const getDaysDiff = (dateStr) => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  const today = new Date()
+  const diffTime = Math.abs(today - date)
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+}
+
+// 导出风险数据
+const exportRiskData = () => {
+  // 创建CSV内容
+  const headers = ['学生姓名', '年级', '班级', '违纪次数', '月度频率', '最近违纪日期', '风险等级', '违纪类型']
+  const csvContent = [
+    headers.join(','),
+    ...riskWarningData.value.map(row => [
+      row.name,
+      row.grade,
+      `${row.class}班`,
+      row.violation_count,
+      `${row.monthly_rate}%`,
+      formatDate(row.latest_violation_date),
+      `${row.risk_level}级风险`,
+      row.violation_types
+    ].join(','))
+  ].join('\n')
+
+  // 创建Blob对象
+  const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `风险预警数据_${formatDate(new Date())}.csv`
+  link.click()
+}
+
+// 在script部分添加新的计算方法
+const getProgressPercentage = (row) => {
+  const maxCount = riskDays.value === '7' ? 5 : 20
+  return Math.min(100, (row.violation_count / maxCount) * 100)
+}
 </script>
 
 <style scoped>
@@ -1069,5 +1413,232 @@ const handleDateChange = () => {
 :deep(.el-card__header) {
   padding: 12px 20px;
   border-bottom: 1px solid #EBEEF5;
+}
+
+.risk-warning-card {
+  height: auto !important;
+  transition: all 0.3s ease;
+}
+
+.risk-warning-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.warning-icon {
+  font-size: 20px;
+  color: #FF4D4F;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2f3d;
+}
+
+.warning-count {
+  margin-left: 8px;
+}
+
+.time-selector {
+  background: #f5f7fa;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.risk-warning-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.risk-chart-section {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2f3d;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 16px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-dot.high {
+  background-color: #FF4D4F;
+}
+
+.legend-dot.medium {
+  background-color: #FAAD14;
+}
+
+.legend-dot.low {
+  background-color: #52C41A;
+}
+
+.risk-chart {
+  height: 300px;
+}
+
+.risk-list-section {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.risk-table {
+  margin-top: 16px;
+}
+
+.student-name {
+  font-weight: 500;
+  color: #1f2f3d;
+}
+
+.rate-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rate-value {
+  font-size: 13px;
+  color: #606266;
+}
+
+.rate-progress {
+  margin-top: 4px;
+}
+
+.date-text {
+  color: #606266;
+}
+
+.risk-level-box {
+  display: flex;
+  align-items: center;
+}
+
+.risk-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+}
+
+.risk-icon {
+  font-size: 14px;
+}
+
+.violation-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.type-tag {
+  margin: 2px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.el-table) {
+  --el-table-border-color: var(--el-border-color-lighter);
+  --el-table-header-bg-color: var(--el-fill-color-light);
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+:deep(.el-table__header) {
+  font-weight: 600;
+}
+
+:deep(.el-table__row) {
+  transition: all 0.3s ease;
+}
+
+:deep(.el-table__row:hover) {
+  background-color: #f5f7fa !important;
+}
+
+:deep(.el-progress-bar__inner) {
+  transition: all 0.3s ease;
+}
+
+:deep(.el-tag) {
+  border: none;
+}
+
+:deep(.el-radio-button__inner) {
+  padding: 8px 15px;
+}
+
+/* 响应式调整 */
+@media screen and (max-width: 1200px) {
+  .risk-chart {
+    height: 250px;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .risk-chart {
+    height: 200px;
+  }
+  
+  .chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .chart-legend {
+    margin-top: 8px;
+  }
 }
 </style> 
