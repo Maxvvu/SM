@@ -14,6 +14,7 @@ const logsRoutes =require('./routes/logs')
 const { errorHandler } = require('./middleware/errorHandler');
 const { logger } = require('./utils/logger');
 const { ensureUploadDirectories } = require('./utils/init');
+const multer = require('multer');
 
 const app = express();
 const port = 3001;
@@ -30,6 +31,7 @@ app.use(cors({
   maxAge: 86400 // 预检请求缓存24小时
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
 // 静态文件服务 - 需要在API路由之前配置
@@ -46,16 +48,25 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/logs', logsRoutes);
 
 // 错误处理中间件
-app.use(errorHandler);
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ message: '文件大小不能超过5MB' });
+    }
+    return res.status(400).json({ message: '文件上传错误' });
+  }
+  res.status(500).json({ message: '服务器内部错误' });
+});
 
 // 初始化数据库并启动服务器
 initDatabase()
   .then(() => {
     app.listen(port, () => {
-
+      console.log(`服务器运行在端口 ${port}`);
     });
   })
   .catch(err => {
-
+    console.error('数据库初始化失败:', err);
     process.exit(1);
   }); 

@@ -78,6 +78,7 @@ import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import axios from 'axios'
 import * as XLSX from 'xlsx'
+import moment from 'moment'
 
 const dateRange = ref([])
 const selectedGrade = ref('')
@@ -103,27 +104,14 @@ onMounted(() => {
 const fetchData = async () => {
   try {
     loading.value = true
-    console.log('获取统计数据，参数:', {
-      grade: selectedGrade.value,
-      start_date: dateRange.value?.[0]?.toISOString(),
-      end_date: dateRange.value?.[1]?.toISOString()
-    })
-
-    // 获取违纪详细数据
-    console.log('获取违纪详细数据，参数:', {
-      grade: selectedGrade.value,
-      category: '违纪',
-      start_date: dateRange.value?.[0]?.toISOString(),
-      end_date: dateRange.value?.[1]?.toISOString()
-    })
-
-    // 获取学生数据（包含班主任信息）
+    
+    // 获取行为记录和学生数据
     const [behaviorsResponse, studentsResponse] = await Promise.all([
       axios.get('/api/behaviors', {
         params: {
           grade: selectedGrade.value,
-          start_date: dateRange.value?.[0]?.toISOString(),
-          end_date: dateRange.value?.[1]?.toISOString()
+          start_date: dateRange.value?.[0]?.toISOString().split('T')[0],
+          end_date: dateRange.value?.[1]?.toISOString().split('T')[0]
         }
       }),
       axios.get('/api/students')
@@ -132,17 +120,18 @@ const fetchData = async () => {
     const students = studentsResponse.data
     const behaviors = behaviorsResponse.data
 
-    // 将班主任信息添加到行为记录中
+    // 将班主任信息和分数信息添加到行为记录中
     allData.value = behaviors.map(behavior => {
       const student = students.find(s => s.name === behavior.student_name)
       return {
         ...behavior,
-        teacher: student?.teacher || '未分配'
+        teacher: student?.teacher || '未分配',
+        behavior_score: behavior.behavior_score || 0,
+        behavior_category: behavior.behavior_category || '未分类'
       }
     })
 
     total.value = allData.value.length
-    console.log('更新后的详细数据总数:', total.value)
 
   } catch (error) {
     console.error('获取数据失败:', error)
@@ -170,13 +159,7 @@ const handleCurrentChange = (val) => {
 }
 
 const formatDate = (date) => {
-  return new Date(date).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  return moment(date).format('YYYY-MM-DD HH:mm:ss')
 }
 
 const exportReport = () => {
@@ -189,18 +172,38 @@ const exportReport = () => {
     '违纪时间': formatDate(item.date),
     '年级': item.grade,
     '班级': item.class,
-    '描述': item.description
+    '描述': item.description,
+    '行为类别': item.behavior_category
   }))
 
   // 创建工作簿
   const wb = XLSX.utils.book_new()
   const ws = XLSX.utils.json_to_sheet(exportData)
 
+  // 设置列宽
+  const colWidths = [
+    { wch: 10 }, // 学生姓名
+    { wch: 10 }, // 班主任
+    { wch: 15 }, // 违纪类型
+    { wch: 8 },  // 扣分
+    { wch: 20 }, // 违纪时间
+    { wch: 8 },  // 年级
+    { wch: 8 },  // 班级
+    { wch: 30 }, // 描述
+    { wch: 10 }  // 行为类别
+  ]
+  ws['!cols'] = colWidths
+
   // 添加工作表到工作簿
-  XLSX.utils.book_append_sheet(wb, ws, '违纪记录')
+  XLSX.utils.book_append_sheet(wb, ws, '行为记录')
+
+  // 生成文件名（包含日期范围）
+  const startDate = dateRange.value?.[0] ? moment(dateRange.value[0]).format('YYYY-MM-DD') : '全部'
+  const endDate = dateRange.value?.[1] ? moment(dateRange.value[1]).format('YYYY-MM-DD') : '全部'
+  const fileName = `行为记录报表_${startDate}_${endDate}.xlsx`
 
   // 导出文件
-  XLSX.writeFile(wb, '违纪记录报表.xlsx')
+  XLSX.writeFile(wb, fileName)
 }
 </script>
 
