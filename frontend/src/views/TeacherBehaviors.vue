@@ -572,8 +572,7 @@ const handleSubmit = async () => {
     submitting.value = true
     const submitData = {
       ...form.value,
-      date: form.value.date ? moment(form.value.date).format('YYYY-MM-DD HH:mm:ss') : moment().format('YYYY-MM-DD HH:mm:ss'),
-      score: getScoreByType(form.value.behavior_type) || 0
+      date: form.value.date ? moment(form.value.date).format('YYYY-MM-DD HH:mm:ss') : moment().format('YYYY-MM-DD HH:mm:ss')
     };
 
     if (form.value.id) {

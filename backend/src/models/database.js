@@ -177,10 +177,25 @@ async function initDatabase() {
         date TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime')),
         process_result TEXT,
         score REAL NOT NULL DEFAULT 0,
+        score_item_id INTEGER REFERENCES score_items(id),
         created_at TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime')),
         updated_at TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime'))
       )
     `);
+
+    // 检查是否需要添加score_item_id列
+    try {
+      await get('SELECT score_item_id FROM teacher_behaviors LIMIT 1');
+    } catch (err) {
+      if (err.message.includes('no such column: score_item_id')) {
+        console.log('正在添加score_item_id列...');
+        await run(`
+          ALTER TABLE teacher_behaviors 
+          ADD COLUMN score_item_id INTEGER REFERENCES score_items(id)
+        `);
+        console.log('score_item_id列添加完成');
+      }
+    }
 
     // 创建class_scores表
     await run(`

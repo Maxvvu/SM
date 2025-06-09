@@ -45,12 +45,18 @@ router.post('/', authenticateToken, async (req, res) => {
     await run('BEGIN TRANSACTION');
 
     try {
+      // 获取行为类型对应的分数项
+      const [scoreItem] = await get('SELECT * FROM score_items WHERE name = ?', [behavior_type]);
+      if (!scoreItem) {
+        return res.status(400).json({ message: '无效的行为类型' });
+      }
+
       // 添加教师行为记录
       const result = await run(
         `INSERT INTO teacher_behaviors 
-         (teacher_name, behavior_type, description, date, process_result, score)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [teacher_name, behavior_type, description, date, process_result, score]
+         (teacher_name, behavior_type, description, date, process_result, score, score_item_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [teacher_name, behavior_type, description, date, process_result, scoreItem.score, scoreItem.id]
       );
 
       console.log('教师行为记录添加成功，ID:', result.lastID);
@@ -133,14 +139,20 @@ router.put('/:id', authenticateToken, async (req, res) => {
     await run('BEGIN TRANSACTION');
 
     try {
+      // 获取行为类型对应的分数项
+      const [scoreItem] = await get('SELECT * FROM score_items WHERE name = ?', [behavior_type]);
+      if (!scoreItem) {
+        return res.status(400).json({ message: '无效的行为类型' });
+      }
+
       // 更新教师行为记录
       await run(
         `UPDATE teacher_behaviors 
          SET teacher_name = ?, behavior_type = ?, description = ?, 
-             date = ?, process_result = ?, score = ?,
+             date = ?, process_result = ?, score = ?, score_item_id = ?,
              updated_at = datetime(CURRENT_TIMESTAMP,'localtime')
          WHERE id = ?`,
-        [teacher_name, behavior_type, description, date, process_result, score, id]
+        [teacher_name, behavior_type, description, date, process_result, scoreItem.score, scoreItem.id, id]
       );
 
       // 如果班级发生变化，需要更新两个班级的分数
