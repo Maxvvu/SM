@@ -10,7 +10,9 @@ const behaviorRoutes = require('./routes/behaviors');
 const behaviorTypeRoutes = require('./routes/behaviorTypes');
 const statisticsRoutes = require('./routes/statistics');
 const uploadRoutes = require('./routes/upload');
-const logsRoutes =require('./routes/logs')
+const logsRoutes = require('./routes/logs');
+const scoreItemsRoutes = require('./routes/scoreItems');
+const teacherBehaviorsRoutes = require('./routes/teacherBehaviors');
 const { errorHandler } = require('./middleware/errorHandler');
 const { logger } = require('./utils/logger');
 const { ensureUploadDirectories } = require('./utils/init');
@@ -46,6 +48,8 @@ app.use('/api/behaviorTypes', behaviorTypeRoutes);
 app.use('/api/statistics', statisticsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/logs', logsRoutes);
+app.use('/api/score-items', scoreItemsRoutes);
+app.use('/api/teacher-behaviors', teacherBehaviorsRoutes);
 
 // 错误处理中间件
 app.use((err, req, res, next) => {

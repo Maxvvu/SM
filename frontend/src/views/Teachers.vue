@@ -1,7 +1,7 @@
 <template>
   <div class="teachers-container">
     <div class="header">
-      <h2>教师管理</h2>
+      <h2>分数统计</h2>
       <div class="header-right">
         <div class="filter-section">
           <el-date-picker

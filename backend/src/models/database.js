@@ -154,6 +154,35 @@ async function initDatabase() {
       }
     }
 
+    // 创建score_items表
+    await run(`
+      CREATE TABLE IF NOT EXISTS score_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        category TEXT CHECK(category IN ('加分', '减分')) NOT NULL,
+        score REAL NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime')),
+        updated_at TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime'))
+      )
+    `);
+
+    // 创建teacher_behaviors表
+    await run('DROP TABLE IF EXISTS teacher_behaviors');
+    await run(`
+      CREATE TABLE IF NOT EXISTS teacher_behaviors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        teacher_name TEXT NOT NULL,
+        behavior_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        date TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime')),
+        process_result TEXT,
+        score REAL NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime')),
+        updated_at TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime'))
+      )
+    `);
+
     // 检查是否需要插入基本行为类型
     const [typeCount] = await get('SELECT COUNT(*) as count FROM behavior_types');
     if (typeCount.count === 0) {
@@ -170,6 +199,26 @@ async function initDatabase() {
         await run(
           'INSERT INTO behavior_types (name, category, description, score) VALUES (?, ?, ?, ?)',
           [name, category, description, score]
+        );
+      }
+    }
+
+    // 检查是否需要插入基本加减分项
+    const [scoreItemCount] = await get('SELECT COUNT(*) as count FROM score_items');
+    if (scoreItemCount.count === 0) {
+      const basicScoreItems = [
+        ['课堂表现优秀', '加分', 2, '在课堂上积极参与，表现突出'],
+        ['参与志愿服务', '加分', 3, '参与学校或社会志愿服务活动'],
+        ['获得竞赛奖项', '加分', 5, '在学科竞赛中获得奖项'],
+        ['违反课堂纪律', '减分', -2, '在课堂上扰乱秩序'],
+        ['迟到早退', '减分', -1, '无故迟到或早退'],
+        ['违反校规', '减分', -3, '违反学校规章制度']
+      ];
+
+      for (const [name, category, score, description] of basicScoreItems) {
+        await run(
+          'INSERT INTO score_items (name, category, score, description) VALUES (?, ?, ?, ?)',
+          [name, category, score, description]
         );
       }
     }

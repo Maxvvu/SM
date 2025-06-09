@@ -87,16 +87,42 @@ router.get('/', authenticateToken, async (req, res, next) => {
     // 4. 获取行为类别统计
     console.info('开始获取行为类别统计...');
     const behaviorStatsQuery = `
+      WITH AllBehaviors AS (
+        -- 学生行为记录
+        SELECT 
+          s.id as student_id,
+          bt.category,
+          bt.score as score
+        FROM behaviors b
+        JOIN students s ON b.student_id = s.id
+        JOIN behavior_types bt ON b.behavior_type = bt.name
+        WHERE 1=1 ${dateCondition} ${gradeCondition}
+        
+        UNION ALL
+        
+        -- 教师行为记录
+        SELECT 
+          s.id as student_id,
+          CASE 
+            WHEN tb.score > 0 THEN '优秀'
+            WHEN tb.score < 0 THEN '违纪'
+            ELSE '其他'
+          END as category,
+          tb.score as score
+        FROM students s
+        JOIN teacher_behaviors tb ON 
+          SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3) = s.grade
+          AND CAST(SUBSTR(tb.teacher_name, INSTR(tb.teacher_name, '班')-2, 2) as INTEGER) = s.class
+        WHERE 1=1 ${dateCondition} ${gradeCondition}
+      )
       SELECT 
-        bt.category,
-        COUNT(DISTINCT b.id) as total_count,
-        COUNT(DISTINCT b.student_id) as student_count,
-        ROUND(COUNT(DISTINCT b.id) * 100.0 / ${studentCount.count}, 2) as percentage
-      FROM behaviors b
-      JOIN behavior_types bt ON b.behavior_type = bt.name
-      JOIN students s ON b.student_id = s.id
-      WHERE 1=1 ${dateCondition} ${gradeCondition}
-      GROUP BY bt.category
+        category,
+        COUNT(*) as total_count,
+        COUNT(DISTINCT student_id) as student_count,
+        ROUND(COUNT(*) * 100.0 / ${studentCount.count}, 2) as percentage,
+        ROUND(SUM(score), 2) as total_score
+      FROM AllBehaviors
+      GROUP BY category
     `;
     const behaviorStats = await get(behaviorStatsQuery, params);
     console.info('行为类别统计:', behaviorStats);
@@ -104,25 +130,52 @@ router.get('/', authenticateToken, async (req, res, next) => {
     // 5. 获取行为类型分布
     console.info('开始获取行为类型分布...');
     const typeDistributionQuery = `
+      WITH AllBehaviors AS (
+        -- 学生行为记录
+        SELECT 
+          b.behavior_type as name,
+          bt.category,
+          COUNT(*) as count,
+          SUM(bt.score) as total_score
+        FROM behaviors b
+        JOIN behavior_types bt ON b.behavior_type = bt.name
+        JOIN students s ON b.student_id = s.id
+        WHERE 1=1 ${dateCondition} ${gradeCondition}
+        GROUP BY b.behavior_type, bt.category
+        
+        UNION ALL
+        
+        -- 教师行为记录
+        SELECT 
+          tb.behavior_type as name,
+          CASE 
+            WHEN tb.score > 0 THEN '优秀'
+            WHEN tb.score < 0 THEN '违纪'
+            ELSE '其他'
+          END as category,
+          COUNT(*) as count,
+          SUM(tb.score) as total_score
+        FROM teacher_behaviors tb
+        WHERE tb.teacher_name LIKE '%班%'
+        ${dateCondition}
+        AND SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3) IN (
+          SELECT DISTINCT grade 
+          FROM students 
+          WHERE 1=1 ${gradeCondition}
+        )
+        GROUP BY tb.behavior_type
+      )
       SELECT 
-        b.behavior_type as name,
-        bt.category,
-        COUNT(*) as value,
-        ROUND(COUNT(*) * 100.0 / (
-          SELECT COUNT(*) 
-          FROM behaviors 
-          WHERE behavior_type IN (
-            SELECT name 
-            FROM behavior_types 
-            WHERE category = bt.category
-          )
+        name,
+        category,
+        SUM(count) as value,
+        ROUND(SUM(total_score), 2) as score,
+        ROUND(SUM(count) * 100.0 / (
+          SELECT SUM(count) FROM AllBehaviors WHERE category = ab.category
         ), 2) as percentage
-      FROM behaviors b
-      JOIN behavior_types bt ON b.behavior_type = bt.name
-      JOIN students s ON b.student_id = s.id
-      WHERE 1=1 ${dateCondition} ${gradeCondition}
-      GROUP BY b.behavior_type, bt.category
-      ORDER BY bt.category, value DESC
+      FROM AllBehaviors ab
+      GROUP BY name, category
+      ORDER BY category, value DESC
     `;
     const typeDistribution = await get(typeDistributionQuery, params);
     console.info('行为类型分布:', typeDistribution);
@@ -151,16 +204,40 @@ router.get('/', authenticateToken, async (req, res, next) => {
     // 6. 获取各班级违纪排名
     console.info('开始获取班级违纪排名...');
     const classRankingQuery = `
+      WITH AllViolations AS (
+        -- 学生行为记录
+        SELECT 
+          s.grade,
+          s.class,
+          b.student_id,
+          b.id as behavior_id,
+          bt.score
+        FROM students s
+        LEFT JOIN behaviors b ON s.id = b.student_id
+        LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
+        WHERE bt.category = '违纪' ${dateCondition} ${gradeCondition}
+        
+        UNION ALL
+        
+        -- 教师行为记录
+        SELECT 
+          s.grade,
+          s.class,
+          s.id as student_id,
+          NULL as behavior_id,
+          tb.score
+        FROM students s
+        CROSS JOIN teacher_behaviors tb
+        WHERE tb.score < 0 ${dateCondition} ${gradeCondition}
+      )
       SELECT 
-        s.grade,
-        s.class,
-        COUNT(b.id) as count,
-        COUNT(DISTINCT b.student_id) as student_count
-      FROM students s
-      LEFT JOIN behaviors b ON s.id = b.student_id
-      LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
-      WHERE bt.category = '违纪' ${dateCondition} ${gradeCondition}
-      GROUP BY s.grade, s.class
+        grade,
+        class,
+        COUNT(behavior_id) as count,
+        COUNT(DISTINCT student_id) as student_count,
+        SUM(score) as total_score
+      FROM AllViolations
+      GROUP BY grade, class
       ORDER BY count DESC
       LIMIT 10
     `;
@@ -297,32 +374,74 @@ router.get('/class', authenticateToken, async (req, res, next) => {
   try {
     const { grade, start_date, end_date } = req.query;
     let query = `
+      WITH AllBehaviors AS (
+        -- 学生行为记录
+        SELECT 
+          s.grade,
+          s.class,
+          bt.category,
+          COUNT(b.id) as count,
+          SUM(bt.score) as total_score
+        FROM students s
+        LEFT JOIN behaviors b ON s.id = b.student_id
+        LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
+        WHERE 1=1
+        ${grade ? ' AND s.grade = ?' : ''}
+        ${start_date ? ' AND b.date >= ?' : ''}
+        ${end_date ? ' AND b.date <= ?' : ''}
+        GROUP BY s.grade, s.class, bt.category
+        
+        UNION ALL
+        
+        -- 教师行为记录（按班级分组）
+        SELECT 
+          SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3) as grade,
+          CAST(SUBSTR(tb.teacher_name, INSTR(tb.teacher_name, '班')-2, 2) as INTEGER) as class,
+          CASE 
+            WHEN tb.score > 0 THEN '优秀'
+            WHEN tb.score < 0 THEN '违纪'
+            ELSE '其他'
+          END as category,
+          COUNT(*) as count,
+          SUM(tb.score) as total_score
+        FROM teacher_behaviors tb
+        WHERE tb.teacher_name LIKE '%班%'
+        ${grade ? " AND SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3) = ?" : ''}
+        ${start_date ? ' AND tb.date >= ?' : ''}
+        ${end_date ? ' AND tb.date <= ?' : ''}
+        GROUP BY 
+          SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3),
+          CAST(SUBSTR(tb.teacher_name, INSTR(tb.teacher_name, '班')-2, 2) as INTEGER),
+          CASE 
+            WHEN tb.score > 0 THEN '优秀'
+            WHEN tb.score < 0 THEN '违纪'
+            ELSE '其他'
+          END
+      )
       SELECT 
-        s.grade,
-        s.class,
-        bt.category,
-        COUNT(b.id) as count
-      FROM students s
-      LEFT JOIN behaviors b ON s.id = b.student_id
-      LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
-      WHERE 1=1
+        grade,
+        class,
+        category,
+        SUM(count) as count,
+        ROUND(SUM(total_score), 2) as total_score
+      FROM AllBehaviors
+      GROUP BY grade, class, category
+      ORDER BY grade, class, category
     `;
 
     const params = [];
     if (grade) {
-      query += ' AND s.grade = ?';
-      params.push(grade);
+      params.push(grade);  // 学生行为记录的条件
+      params.push(grade);  // 教师行为记录的条件
     }
     if (start_date) {
-      query += ' AND b.date >= ?';
-      params.push(start_date);
+      params.push(start_date);  // 学生行为记录的条件
+      params.push(start_date);  // 教师行为记录的条件
     }
     if (end_date) {
-      query += ' AND b.date <= ?';
-      params.push(end_date);
+      params.push(end_date);  // 学生行为记录的条件
+      params.push(end_date);  // 教师行为记录的条件
     }
-
-    query += ' GROUP BY s.grade, s.class, bt.category ORDER BY s.grade, s.class, bt.category';
     
     const statistics = await get(query, params);
     res.json(statistics);
@@ -336,35 +455,79 @@ router.get('/student/:id', authenticateToken, async (req, res, next) => {
   try {
     const { start_date, end_date } = req.query;
     let query = `
+      WITH StudentBehaviors AS (
+        -- 学生个人行为记录
+        SELECT 
+          s.name,
+          s.grade,
+          s.class,
+          bt.name as behavior_type,
+          bt.category,
+          COUNT(b.id) as count,
+          SUM(bt.score) as total_score
+        FROM students s
+        LEFT JOIN behaviors b ON s.id = b.student_id
+        LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
+        WHERE s.id = ?
+        ${start_date ? ' AND b.date >= ?' : ''}
+        ${end_date ? ' AND b.date <= ?' : ''}
+        GROUP BY bt.name, bt.category
+        
+        UNION ALL
+        
+        -- 教师行为记录
+        SELECT 
+          s.name,
+          s.grade,
+          s.class,
+          tb.behavior_type,
+          CASE 
+            WHEN tb.score > 0 THEN '优秀'
+            WHEN tb.score < 0 THEN '违纪'
+            ELSE '其他'
+          END as category,
+          COUNT(*) as count,
+          tb.score as total_score
+        FROM students s
+        JOIN teacher_behaviors tb ON 
+          SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3) = s.grade
+          AND CAST(SUBSTR(tb.teacher_name, INSTR(tb.teacher_name, '班')-2, 2) as INTEGER) = s.class
+        WHERE s.id = ?
+        ${start_date ? ' AND tb.date >= ?' : ''}
+        ${end_date ? ' AND tb.date <= ?' : ''}
+        GROUP BY tb.behavior_type
+      )
       SELECT 
-        s.name,
-        s.grade,
-        s.class,
-        bt.name as behavior_type,
-        bt.category,
-        COUNT(b.id) as count
-      FROM students s
-      LEFT JOIN behaviors b ON s.id = b.student_id
-      LEFT JOIN behavior_types bt ON b.behavior_type = bt.name
-      WHERE s.id = ?
+        name,
+        grade,
+        class,
+        behavior_type,
+        category,
+        SUM(count) as count,
+        ROUND(SUM(total_score), 2) as score
+      FROM StudentBehaviors
+      GROUP BY behavior_type, category
+      ORDER BY category, count DESC
     `;
 
     const params = [req.params.id];
     if (start_date) {
-      query += ' AND b.date >= ?';
-      params.push(start_date);
+      params.push(start_date);  // 学生行为记录的条件
+      params.push(req.params.id);  // 教师行为记录的学生ID
+      params.push(start_date);  // 教师行为记录的条件
     }
     if (end_date) {
-      query += ' AND b.date <= ?';
-      params.push(end_date);
+      params.push(end_date);  // 学生行为记录的条件
+      if (!start_date) {
+        params.push(req.params.id);  // 如果没有start_date，需要添加学生ID
+      }
+      params.push(end_date);  // 教师行为记录的条件
     }
-
-    query += ' GROUP BY bt.name, bt.category ORDER BY bt.category, count DESC';
+    if (!start_date && !end_date) {
+      params.push(req.params.id);  // 如果没有日期条件，需要添加学生ID
+    }
     
     const statistics = await get(query, params);
-    if (statistics.length === 0) {
-      return res.status(404).json({ message: '未找到该学生' });
-    }
     res.json(statistics);
   } catch (err) {
     next(err);

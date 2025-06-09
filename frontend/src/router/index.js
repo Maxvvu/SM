@@ -84,7 +84,25 @@ const routes = [
         name: 'Teachers',
         component: () => import('../views/Teachers.vue'),
         meta: {
-          title: '教师管理',
+          title: '分数统计',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'teacher-behaviors',
+        name: 'TeacherBehaviors',
+        component: () => import('../views/TeacherBehaviors.vue'),
+        meta: {
+          title: '教师行为记录',
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'score-items',
+        name: 'ScoreItems',
+        component: () => import('../views/ScoreItems.vue'),
+        meta: {
+          title: '加减分项管理',
           requiresAuth: true
         }
       }
