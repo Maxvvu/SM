@@ -45,15 +45,6 @@
           <template #default="scope">
             <div class="teacher-info">
               <span>{{ scope.row.teacher_name }}</span>
-              <template v-if="getClassScore(scope.row.teacher_name)">
-                <el-tag 
-                  :type="getClassScore(scope.row.teacher_name).total_score >= 0 ? 'success' : 'danger'"
-                  size="small"
-                  class="class-score"
-                >
-                  班级总分: {{ getClassScore(scope.row.teacher_name).total_score }}
-                </el-tag>
-              </template>
             </div>
           </template>
         </el-table-column>
@@ -270,8 +261,6 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const selectedBehavior = ref(null)
 const formRef = ref(null)
-const classScores = ref([])
-
 // 行为类型列表（从加减分项获取）
 const behaviorTypes = ref([])
 const scoreItemsMap = ref(new Map())
@@ -465,33 +454,6 @@ const fetchTeachers = async () => {
   }
 }
 
-// 获取班级总分
-const fetchClassScores = async () => {
-  try {
-    const response = await axios.get('/api/statistics/class-scores')
-    classScores.value = response.data
-  } catch (error) {
-    console.error('获取班级总分失败:', error)
-    ElMessage.error('获取班级总分失败')
-  }
-}
-
-// 获取班级总分
-const getClassScore = (teacherName) => {
-  if (!teacherName || !classScores.value.length) return null
-  
-  // 从教师名称中提取年级和班级
-  const match = teacherName.match(/(高[一二三])(\d+)班/)
-  if (!match) return null
-  
-  const [, grade, classNum] = match
-  const classScore = classScores.value.find(
-    score => score.grade === grade && parseInt(score.class) === parseInt(classNum)
-  )
-  
-  return classScore
-}
-
 // 事件处理函数
 const handleSearch = () => {
   currentPage.value = 1
@@ -542,11 +504,7 @@ const handleDelete = (row) => {
       try {
         await axios.delete(`/api/teacher-behaviors/${row.id}`)
         ElMessage.success('删除成功')
-        // 同时刷新行为记录和班级分数
-        await Promise.all([
-          fetchBehaviors(),
-          fetchClassScores()
-        ])
+            await fetchBehaviors()
       } catch (error) {
         console.error('删除失败:', error)
         ElMessage.error('删除失败')
@@ -585,11 +543,7 @@ const handleSubmit = async () => {
       ElMessage.success('添加成功')
     }
     dialogVisible.value = false
-    // 同时刷新行为记录和班级分数
-    await Promise.all([
-      fetchBehaviors(),
-      fetchClassScores()
-    ])
+    await fetchBehaviors()
   } catch (error) {
     if (error.response?.data?.message) {
       ElMessage.error(error.response.data.message)
@@ -611,8 +565,7 @@ onMounted(async () => {
   await Promise.all([
     fetchBehaviors(),
     fetchTeachers(),
-    fetchBehaviorTypes(),
-    fetchClassScores()
+    fetchBehaviorTypes()
   ])
 })
 </script>
@@ -734,11 +687,6 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.class-score {
-  font-size: 12px;
-  margin-top: 4px;
 }
 
 @media screen and (max-width: 768px) {
