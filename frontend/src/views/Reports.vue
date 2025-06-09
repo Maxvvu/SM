@@ -55,6 +55,14 @@
         <el-table-column prop="grade" label="年级" width="100" />
         <el-table-column prop="class" label="班级" width="100" />
         <el-table-column prop="description" label="描述" show-overflow-tooltip />
+        <el-table-column prop="process_result" label="处理结果" show-overflow-tooltip>
+          <template #default="scope">
+            <el-tag v-if="scope.row.process_result" type="info" effect="plain">
+              {{ scope.row.process_result }}
+            </el-tag>
+            <span v-else class="no-result">未处理</span>
+          </template>
+        </el-table-column>
       </el-table>
       
       <div class="pagination">
@@ -173,6 +181,7 @@ const exportReport = () => {
     '年级': item.grade,
     '班级': item.class,
     '描述': item.description,
+    '处理结果': item.process_result || '未处理',
     '行为类别': item.behavior_category
   }))
 
@@ -190,6 +199,7 @@ const exportReport = () => {
     { wch: 8 },  // 年级
     { wch: 8 },  // 班级
     { wch: 30 }, // 描述
+    { wch: 15 }, // 处理结果
     { wch: 10 }  // 行为类别
   ]
   ws['!cols'] = colWidths
@@ -248,5 +258,10 @@ const exportReport = () => {
 .positive-score {
   color: #67c23a;
   font-weight: 600;
+}
+
+.no-result {
+  color: #909399;
+  font-weight: 400;
 }
 </style> 

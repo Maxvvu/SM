@@ -133,10 +133,8 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 // 创建行为记录
 router.post('/', authenticateToken, upload.single('image'), async (req, res, next) => {
   try {
-    const { student_id, behavior_type, description ,image_url,date} = req.body;
+    const { student_id, behavior_type, description, image_url, date, process_result } = req.body;
     
-     
-
     // 验证行为类型是否存在
     const [type] = await get('SELECT * FROM behavior_types WHERE name = ?', [behavior_type]);
     if (!type) {
@@ -154,7 +152,8 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res, nex
         behavior_type,
         description,
         image_url,
-        date
+        date,
+        process_result
       }
     });
     // 验证学生是否存在
@@ -164,9 +163,9 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res, nex
     }
 
     const result = await run(
-      `INSERT INTO behaviors (student_id, behavior_type, description,date, image_url)
-       VALUES (?, ?, ?, ?, ?)`,
-      [student_id, behavior_type, description, date, image_url]
+      `INSERT INTO behaviors (student_id, behavior_type, description, date, image_url, process_result)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [student_id, behavior_type, description, date, image_url, process_result]
     );
 
     const [newBehavior] = await get(
@@ -186,57 +185,110 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res, nex
 // 更新行为记录
 router.put('/:id', authenticateToken, upload.single('image'), async (req, res, next) => {
   try {
-    const { student_id, behavior_type, description,image_url,date } = req.body;
+    console.log('收到更新请求:', req.params.id, req.body);
 
-    let updateFields = [];
-    let params = [];
+    // 检查记录是否存在
+    const [existingBehavior] = await get('SELECT * FROM behaviors WHERE id = ?', [req.params.id]);
+    if (!existingBehavior) {
+      return res.status(404).json({ message: '未找到该行为记录' });
+    }
 
-    const fields = {
-      student_id,
-      behavior_type,
-      description,
-      image_url,
-      date
-    };
-    logger.logOperation({
-      type: 'upadate',
-      module: 'behaviors',
-      description: `更新行为记录`,
-      status: 'success',  
-      username: req.user.username,
-      ip: req.ip,
-      details: {
-        student_id,
-        behavior_type,
-        description,
-        image_url,  
-      }
-    });
-    for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        updateFields.push(`${key} = ?`);
-        params.push(value);
+    const { student_id, behavior_type, description, image_url, date, process_result } = req.body;
+
+    // 如果提供了student_id，验证学生是否存在
+    if (student_id) {
+      const [student] = await get('SELECT * FROM students WHERE id = ?', [student_id]);
+      if (!student) {
+        return res.status(400).json({ message: '无效的学生ID' });
       }
     }
 
- 
+    // 如果提供了behavior_type，验证行为类型是否存在
+    if (behavior_type) {
+      const [type] = await get('SELECT * FROM behavior_types WHERE name = ?', [behavior_type]);
+      if (!type) {
+        return res.status(400).json({ message: '无效的行为类型' });
+      }
+    }
 
+    // 构建更新语句
+    const updates = [];
+    const params = [];
+
+    if (student_id) {
+      updates.push('student_id = ?');
+      params.push(student_id);
+    }
+    if (behavior_type) {
+      updates.push('behavior_type = ?');
+      params.push(behavior_type);
+    }
+    if (description !== undefined) {
+      updates.push('description = ?');
+      params.push(description);
+    }
+    if (date) {
+      updates.push('date = ?');
+      params.push(date);
+    }
+    if (image_url !== undefined) {
+      updates.push('image_url = ?');
+      params.push(image_url);
+    }
+    if (process_result !== undefined) {
+      updates.push('process_result = ?');
+      params.push(process_result);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ message: '没有需要更新的字段' });
+    }
+
+    // 添加ID到参数数组
     params.push(req.params.id);
 
+    console.log('执行更新SQL:', `UPDATE behaviors SET ${updates.join(', ')} WHERE id = ?`);
+    console.log('更新参数:', params);
+
+    // 执行更新
     await run(
-      `UPDATE behaviors SET ${updateFields.join(', ')} WHERE id = ?`,
+      `UPDATE behaviors SET ${updates.join(', ')} WHERE id = ?`,
       params
     );
 
+    // 获取更新后的完整记录
     const [updatedBehavior] = await get(
-      `SELECT b.*, s.name as student_name, s.grade, s.class, s.status as student_status
+      `SELECT b.*, s.name as student_name, s.grade, s.class, s.status as student_status,
+              bt.score as behavior_score, bt.category as behavior_category
        FROM behaviors b
        JOIN students s ON b.student_id = s.id
+       JOIN behavior_types bt ON b.behavior_type = bt.name
        WHERE b.id = ?`,
       [req.params.id]
     );
+
+    if (!updatedBehavior) {
+      return res.status(404).json({ message: '未找到更新后的记录' });
+    }
+
+    // 记录操作日志
+    logger.logOperation({
+      type: 'update',
+      module: 'behaviors',
+      description: `更新行为记录`,
+      status: 'success',
+      username: req.user.username,
+      ip: req.ip,
+      details: {
+        id: req.params.id,
+        updates: req.body
+      }
+    });
+
+    console.log('更新成功，返回更新后的记录:', updatedBehavior);
     res.json(updatedBehavior);
   } catch (err) {
+    console.error('更新行为记录失败:', err);
     next(err);
   }
 });

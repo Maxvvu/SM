@@ -132,10 +132,27 @@ async function initDatabase() {
         description TEXT,
         date TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime')),
         image_url TEXT,
+        process_result TEXT,
         FOREIGN KEY (student_id) REFERENCES students (id),
         FOREIGN KEY (behavior_type) REFERENCES behavior_types (name)
       )
     `);
+
+    // 检查是否需要添加process_result列
+    try {
+      // 检查process_result列是否存在
+      await get('SELECT process_result FROM behaviors LIMIT 1');
+    } catch (err) {
+      if (err.message.includes('no such column: process_result')) {
+        console.log('正在添加process_result列...');
+        // 添加process_result列
+        await run(`
+          ALTER TABLE behaviors 
+          ADD COLUMN process_result TEXT
+        `);
+        console.log('process_result列添加完成');
+      }
+    }
 
     // 检查是否需要插入基本行为类型
     const [typeCount] = await get('SELECT COUNT(*) as count FROM behavior_types');

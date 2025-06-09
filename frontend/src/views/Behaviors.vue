@@ -163,6 +163,14 @@
           </template>
         </el-table-column>
         <el-table-column prop="description" label="描述" show-overflow-tooltip />
+        <el-table-column prop="process_result" label="处理结果" show-overflow-tooltip>
+          <template #default="scope">
+            <el-tag v-if="scope.row.process_result" type="info" effect="plain">
+              {{ scope.row.process_result }}
+            </el-tag>
+            <span v-else class="no-result">未处理</span>
+          </template>
+        </el-table-column>
         <el-table-column label="图片" width="100">
           <template #default="scope">
             <div class="image-container">
@@ -288,6 +296,36 @@
             <p>{{ selectedBehavior.description }}</p>
           </div>
 
+          <div class="detail-item process-result">
+            <div class="process-result-header">
+              <label>处理结果：</label>
+              <div class="process-result-actions" v-if="!isEditing">
+                <el-button type="primary" link @click="handleStartEdit">
+                  <el-icon><Edit /></el-icon>
+                  编辑
+                </el-button>
+              </div>
+              <div class="process-result-actions" v-else>
+                <el-button type="success" link @click="handleSaveEdit" :loading="submitting">
+                  <el-icon><Check /></el-icon>
+                  保存
+                </el-button>
+                <el-button type="danger" link @click="handleCancelEdit">
+                  <el-icon><Close /></el-icon>
+                  取消
+                </el-button>
+              </div>
+            </div>
+            <el-input
+              v-if="isEditing"
+              v-model="editForm.process_result"
+              type="textarea"
+              :rows="2"
+              placeholder="请输入处理结果"
+            />
+            <p v-else>{{ selectedBehavior.process_result || '暂未处理' }}</p>
+          </div>
+
           <div class="detail-item image" v-if="selectedBehavior.image_url">
             <label>相关图片：</label>
             <div class="image-preview">
@@ -381,6 +419,14 @@
             placeholder="请输入具体描述"
           />
         </el-form-item>
+        <el-form-item label="处理结果" prop="process_result">
+          <el-input
+            v-model="form.process_result"
+            type="textarea"
+            :rows="2"
+            placeholder="请输入处理结果"
+          />
+        </el-form-item>
         <el-form-item label="图片">
           <el-upload
             class="behavior-image-uploader"
@@ -428,7 +474,10 @@ import {
   CircleCheckFilled,
   WarningFilled,
   Search,
-  Calendar
+  Calendar,
+  Edit,
+  Check,
+  Close
 } from '@element-plus/icons-vue'
 
 const loading = ref(false)
@@ -454,7 +503,8 @@ const form = ref({
   behavior_type: '',
   description: '',
   date: "",
-  image_url: ''
+  image_url: '',
+  process_result: ''
 })
 
 const rules = {
@@ -754,7 +804,8 @@ const handleAdd = () => {
     behavior_type: '',
     description: '',
     date: moment().format('YYYY-MM-DD HH:mm:ss'),
-    image_url: ''
+    image_url: '',
+    process_result: ''
   }
   dialogVisible.value = true
 }
@@ -770,7 +821,8 @@ const handleEdit = (row) => {
     behavior_type: row.behavior_type,
     description: row.description,
     date: formattedDate,
-    image_url: row.image_url
+    image_url: row.image_url,
+    process_result: row.process_result
   }
   dialogVisible.value = true
 }
@@ -782,7 +834,7 @@ const handleSubmit = async () => {
   try {
     await formRef.value.validate()
     
-    loading.value = true
+    submitting.value = true
     
     // 处理时区问题，确保使用本地时间
     const formattedDate = moment(form.value.date).format('YYYY-MM-DDTHH:mm:ss')
@@ -792,7 +844,8 @@ const handleSubmit = async () => {
       behavior_type: form.value.behavior_type,
       description: form.value.description.trim(),
       date: formattedDate,
-      image_url: form.value.image_url || ''
+      image_url: form.value.image_url || null,
+      process_result: form.value.process_result?.trim() || null
     }
 
     console.log('准备提交的数据:', requestData)
@@ -837,6 +890,11 @@ const handleSubmit = async () => {
       resetForm()
     } catch (error) {
       console.error('操作失败:', error)
+      if (error.response?.data?.message) {
+        ElMessage.error(error.response.data.message)
+      } else {
+        ElMessage.error(form.value.id ? '更新失败' : '添加失败')
+      }
       throw error
     }
   } catch (error) {
@@ -847,7 +905,7 @@ const handleSubmit = async () => {
       ElMessage.error(form.value.id ? '更新失败' : '添加失败')
     }
   } finally {
-    loading.value = false
+    submitting.value = false
   }
 }
 
@@ -858,7 +916,8 @@ const resetForm = () => {
     student_id: '',
     behavior_type: '',
     description: '',
-    image_url: ''
+    image_url: '',
+    process_result: ''
   }
   if (formRef.value) {
     formRef.value.resetFields()
@@ -996,10 +1055,14 @@ const imageProps = {
 // 添加详情对话框相关的响应式变量
 const detailDialogVisible = ref(false)
 const selectedBehavior = ref(null)
+const isEditing = ref(false)
+const editForm = ref({
+  process_result: ''
+})
 
 // 添加行点击事件处理函数
 const handleDetail = (row) => {
-  selectedBehavior.value = row
+  selectedBehavior.value = { ...row }
   detailDialogVisible.value = true
 }
 
@@ -1084,6 +1147,49 @@ const getStatusStyle = (status) => {
         color: '#67c23a'
       }
   }
+}
+
+// 修改处理结果编辑相关方法
+const handleStartEdit = () => {
+  editForm.value.process_result = selectedBehavior.value.process_result || ''
+  isEditing.value = true
+}
+
+const handleSaveEdit = async () => {
+  try {
+    submitting.value = true
+    const response = await axios.put(`/api/behaviors/${selectedBehavior.value.id}`, {
+      ...selectedBehavior.value,
+      process_result: editForm.value.process_result?.trim() || null
+    })
+    
+    // 更新本地数据
+    const index = behaviors.value.findIndex(b => b.id === selectedBehavior.value.id)
+    if (index !== -1) {
+      behaviors.value[index] = {
+        ...behaviors.value[index],
+        process_result: editForm.value.process_result
+      }
+      selectedBehavior.value.process_result = editForm.value.process_result
+    }
+    
+    isEditing.value = false
+    ElMessage.success('处理结果已更新')
+  } catch (error) {
+    console.error('更新处理结果失败:', error)
+    if (error.response?.data?.message) {
+      ElMessage.error(error.response.data.message)
+    } else {
+      ElMessage.error('更新处理结果失败')
+    }
+  } finally {
+    submitting.value = false
+  }
+}
+
+const handleCancelEdit = () => {
+  isEditing.value = false
+  editForm.value.process_result = selectedBehavior.value.process_result || ''
 }
 
 onMounted(() => {
@@ -1388,6 +1494,14 @@ onMounted(() => {
       }
     }
     
+    &.process-result {
+      p {
+        margin: 0;
+        line-height: 1.6;
+        color: var(--el-text-color-primary);
+      }
+    }
+    
     &.image {
       .image-preview {
         width: 100%;
@@ -1587,5 +1701,50 @@ onMounted(() => {
 
 .behavior-score.negative {
   color: var(--el-color-danger);
+}
+
+.process-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.process-result-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.process-result-actions .el-button {
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.no-result {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.detail-item.process-result {
+  background-color: var(--el-color-primary-light-9);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+  
+  .el-input {
+    margin-top: 8px;
+  }
+  
+  p {
+    margin: 8px 0 0 0;
+    line-height: 1.6;
+    color: var(--el-text-color-primary);
+    padding: 8px;
+    background-color: white;
+    border-radius: 4px;
+    min-height: 40px;
+  }
 }
 </style> 
