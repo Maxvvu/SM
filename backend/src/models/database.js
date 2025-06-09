@@ -168,7 +168,6 @@ async function initDatabase() {
     `);
 
     // 创建teacher_behaviors表
-    await run('DROP TABLE IF EXISTS teacher_behaviors');
     await run(`
       CREATE TABLE IF NOT EXISTS teacher_behaviors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -180,6 +179,18 @@ async function initDatabase() {
         score REAL NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime')),
         updated_at TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime'))
+      )
+    `);
+
+    // 创建class_scores表
+    await run(`
+      CREATE TABLE IF NOT EXISTS class_scores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        grade TEXT NOT NULL,
+        class TEXT NOT NULL,
+        total_score REAL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT (datetime(CURRENT_TIMESTAMP,'localtime')),
+        UNIQUE(grade, class)
       )
     `);
 

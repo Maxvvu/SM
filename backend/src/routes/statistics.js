@@ -111,9 +111,10 @@ router.get('/', authenticateToken, async (req, res, next) => {
           tb.score as score
         FROM students s
         JOIN teacher_behaviors tb ON 
-          SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3) = s.grade
-          AND CAST(SUBSTR(tb.teacher_name, INSTR(tb.teacher_name, '班')-2, 2) as INTEGER) = s.class
-        WHERE 1=1 ${dateCondition} ${gradeCondition}
+          REGEXP_SUBSTR(tb.teacher_name, '高[一二三]') = s.grade
+          AND CAST(REGEXP_SUBSTR(tb.teacher_name, '\\d+') AS INTEGER) = s.class
+        WHERE s.id = ?
+        ${dateCondition}
       )
       SELECT 
         category,
@@ -221,14 +222,31 @@ router.get('/', authenticateToken, async (req, res, next) => {
         
         -- 教师行为记录
         SELECT 
-          s.grade,
-          s.class,
-          s.id as student_id,
-          NULL as behavior_id,
-          tb.score
-        FROM students s
-        CROSS JOIN teacher_behaviors tb
-        WHERE tb.score < 0 ${dateCondition} ${gradeCondition}
+          CASE 
+            WHEN tb.teacher_name REGEXP '高[一二三]' 
+            THEN REGEXP_SUBSTR(tb.teacher_name, '高[一二三]')
+            ELSE NULL
+          END as grade,
+          CASE 
+            WHEN tb.teacher_name REGEXP '\\d+班' 
+            THEN CAST(REGEXP_SUBSTR(tb.teacher_name, '\\d+') AS INTEGER)
+            ELSE NULL
+          END as class,
+          CASE 
+            WHEN tb.score > 0 THEN '优秀'
+            WHEN tb.score < 0 THEN '违纪'
+            ELSE '其他'
+          END as category,
+          COUNT(*) as count,
+          SUM(tb.score) as total_score
+        FROM teacher_behaviors tb
+        WHERE tb.teacher_name REGEXP '高[一二三]\\d+班'
+        ${grade ? " AND tb.teacher_name REGEXP ?" : ''}
+        ${dateCondition}
+        GROUP BY 
+          grade,
+          class,
+          category
       )
       SELECT 
         grade,
@@ -395,8 +413,16 @@ router.get('/class', authenticateToken, async (req, res, next) => {
         
         -- 教师行为记录（按班级分组）
         SELECT 
-          SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3) as grade,
-          CAST(SUBSTR(tb.teacher_name, INSTR(tb.teacher_name, '班')-2, 2) as INTEGER) as class,
+          CASE 
+            WHEN tb.teacher_name REGEXP '高[一二三]' 
+            THEN REGEXP_SUBSTR(tb.teacher_name, '高[一二三]')
+            ELSE NULL
+          END as grade,
+          CASE 
+            WHEN tb.teacher_name REGEXP '\\d+班' 
+            THEN CAST(REGEXP_SUBSTR(tb.teacher_name, '\\d+') AS INTEGER)
+            ELSE NULL
+          END as class,
           CASE 
             WHEN tb.score > 0 THEN '优秀'
             WHEN tb.score < 0 THEN '违纪'
@@ -405,18 +431,14 @@ router.get('/class', authenticateToken, async (req, res, next) => {
           COUNT(*) as count,
           SUM(tb.score) as total_score
         FROM teacher_behaviors tb
-        WHERE tb.teacher_name LIKE '%班%'
-        ${grade ? " AND SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3) = ?" : ''}
+        WHERE tb.teacher_name REGEXP '高[一二三]\\d+班'
+        ${grade ? " AND tb.teacher_name REGEXP ?" : ''}
         ${start_date ? ' AND tb.date >= ?' : ''}
         ${end_date ? ' AND tb.date <= ?' : ''}
         GROUP BY 
-          SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3),
-          CAST(SUBSTR(tb.teacher_name, INSTR(tb.teacher_name, '班')-2, 2) as INTEGER),
-          CASE 
-            WHEN tb.score > 0 THEN '优秀'
-            WHEN tb.score < 0 THEN '违纪'
-            ELSE '其他'
-          END
+          grade,
+          class,
+          category
       )
       SELECT 
         grade,
@@ -490,8 +512,8 @@ router.get('/student/:id', authenticateToken, async (req, res, next) => {
           tb.score as total_score
         FROM students s
         JOIN teacher_behaviors tb ON 
-          SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3) = s.grade
-          AND CAST(SUBSTR(tb.teacher_name, INSTR(tb.teacher_name, '班')-2, 2) as INTEGER) = s.class
+          REGEXP_SUBSTR(tb.teacher_name, '高[一二三]') = s.grade
+          AND CAST(REGEXP_SUBSTR(tb.teacher_name, '\\d+') AS INTEGER) = s.class
         WHERE s.id = ?
         ${start_date ? ' AND tb.date >= ?' : ''}
         ${end_date ? ' AND tb.date <= ?' : ''}
@@ -1151,6 +1173,38 @@ router.get('/risk-warning', authenticateToken, async (req, res, next) => {
       sqlMessage: error.sqlMessage
     });
     next(error);
+  }
+});
+
+// 获取班级总分统计
+router.get('/class-scores', authenticateToken, async (req, res, next) => {
+  try {
+    const { grade } = req.query;
+    let query = `
+      SELECT 
+        cs.*,
+        (SELECT COUNT(*) FROM students s 
+         WHERE s.grade = cs.grade AND s.class = cs.class) as student_count
+      FROM class_scores cs
+      WHERE 1=1
+      ${grade ? ' AND cs.grade = ?' : ''}
+      ORDER BY cs.grade, cs.class
+    `;
+
+    const params = grade ? [grade] : [];
+    const scores = await get(query, params);
+
+    // 计算每个班级的人均分
+    const classScores = scores.map(score => ({
+      ...score,
+      average_score: score.student_count > 0 
+        ? Math.round((score.total_score / score.student_count) * 100) / 100
+        : 0
+    }));
+
+    res.json(classScores);
+  } catch (err) {
+    next(err);
   }
 });
 

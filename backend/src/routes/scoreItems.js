@@ -4,6 +4,38 @@ const { get, run } = require('../models/database');
 const { authenticateToken } = require('../middleware/auth');
 const { logger } = require('../utils/logger');
 
+// 更新班级分数的辅助函数
+async function updateClassScore(grade, className, score) {
+  try {
+    // 检查班级记录是否存在
+    const [existingRecord] = await get(
+      'SELECT * FROM class_scores WHERE grade = ? AND class = ?',
+      [grade, className]
+    );
+
+    if (existingRecord) {
+      // 更新现有记录
+      await run(
+        `UPDATE class_scores 
+         SET total_score = total_score + ?,
+             updated_at = datetime(CURRENT_TIMESTAMP,'localtime')
+         WHERE grade = ? AND class = ?`,
+        [score, grade, className]
+      );
+    } else {
+      // 创建新记录
+      await run(
+        `INSERT INTO class_scores (grade, class, total_score)
+         VALUES (?, ?, ?)`,
+        [grade, className, score]
+      );
+    }
+  } catch (error) {
+    console.error('更新班级分数失败:', error);
+    throw error;
+  }
+}
+
 // 获取所有加减分项
 router.get('/', authenticateToken, async (req, res) => {
   try {
