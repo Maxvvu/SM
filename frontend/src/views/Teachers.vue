@@ -97,7 +97,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import axios from 'axios'
@@ -112,6 +112,7 @@ const teachers = ref([])
 const behaviors = ref([])
 const behaviorTypes = ref([])
 const selectedMonth = ref(moment().format('YYYY-MM'))
+const teacherMap = ref(new Map())
 
 // 禁用未来月份
 const disabledDate = (time) => {
@@ -127,30 +128,32 @@ const handleMonthChange = () => {
 const fetchTeachers = async () => {
   loading.value = true
   try {
-    const [studentsResponse, behaviorsResponse] = await Promise.all([
+    const [studentsResponse, behaviorsResponse, teacherBehaviorsResponse] = await Promise.all([
       axios.get('/api/students'),
-      axios.get('/api/behaviors')
+      axios.get('/api/behaviors'),
+      axios.get('/api/teacher-behaviors')
     ])
     
     const students = studentsResponse.data
     behaviors.value = behaviorsResponse.data
+    const teacherBehaviors = teacherBehaviorsResponse.data
     
     // 提取所有不重复的教师信息
-    const teacherMap = new Map()
+    teacherMap.value = new Map()
     students.forEach(student => {
       if (student.teacher) {
-        if (!teacherMap.has(student.teacher)) {
-          teacherMap.set(student.teacher, {
+        if (!teacherMap.value.has(student.teacher)) {
+          teacherMap.value.set(student.teacher, {
             name: student.teacher,
             classes: new Set([`${student.grade}年级${student.class}班`]),
             studentCount: 1,
             violationCount: 0,
             score: 1000,
             scoreChange: 0,
-            monthlyScores: {} // 添加月度分数记录
+            monthlyScores: {}
           })
         } else {
-          const teacherData = teacherMap.get(student.teacher)
+          const teacherData = teacherMap.value.get(student.teacher)
           teacherData.classes.add(`${student.grade}年级${student.class}班`)
           teacherData.studentCount++
         }
@@ -164,7 +167,7 @@ const fetchTeachers = async () => {
         // 找到该学生对应的教师
         const student = students.find(s => s.name === behavior.student_name)
         if (student && student.teacher) {
-          const teacherData = teacherMap.get(student.teacher)
+          const teacherData = teacherMap.value.get(student.teacher)
           if (teacherData) {
             // 初始化月度分数记录
             if (!teacherData.monthlyScores[behaviorMonth]) {
@@ -185,9 +188,36 @@ const fetchTeachers = async () => {
         }
       }
     })
+
+    // 统计教师行为记录的分数
+    teacherBehaviors.forEach(behavior => {
+      if (behavior.teacher_name && behavior.date) {
+        const behaviorMonth = moment(behavior.date).format('YYYY-MM')
+        const teacherName = getTeacherNameFromClass(behavior.teacher_name)
+        if (teacherName) {
+          const teacherData = teacherMap.value.get(teacherName)
+          if (teacherData) {
+            // 初始化月度分数记录
+            if (!teacherData.monthlyScores[behaviorMonth]) {
+              teacherData.monthlyScores[behaviorMonth] = {
+                score: 1000,
+                scoreChange: 0,
+                violationCount: 0
+              }
+            }
+            
+            // 更新分数变化
+            teacherData.monthlyScores[behaviorMonth].scoreChange += behavior.score
+            if (behavior.score < 0) {
+              teacherData.monthlyScores[behaviorMonth].violationCount++
+            }
+          }
+        }
+      }
+    })
     
     // 计算所选月份的最终分数
-    teacherMap.forEach(teacher => {
+    teacherMap.value.forEach(teacher => {
       const monthlyScore = teacher.monthlyScores[selectedMonth.value] || {
         score: 1000,
         scoreChange: 0,
@@ -199,7 +229,7 @@ const fetchTeachers = async () => {
     })
     
     // 转换为数组格式
-    teachers.value = Array.from(teacherMap.values()).map(teacher => ({
+    teachers.value = Array.from(teacherMap.value.values()).map(teacher => ({
       ...teacher,
       classes: Array.from(teacher.classes)
     }))
@@ -209,6 +239,24 @@ const fetchTeachers = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 从班级名称中提取教师姓名
+const getTeacherNameFromClass = (className) => {
+  // 从班级名称中提取年级和班级号（例如：高一1班 -> 高一、1）
+  const match = className.match(/(高[一二三])(\d+)班/)
+  if (!match) return null
+
+  const [, grade, classNum] = match
+  const classInfo = `${grade}年级${classNum}班`
+
+  // 遍历 teacherMap 查找对应的教师
+  for (const [teacherName, teacherData] of teacherMap.value.entries()) {
+    if (teacherData.classes.has(classInfo)) {
+      return teacherName
+    }
+  }
+  return null
 }
 
 // 获取行为类型列表
@@ -309,10 +357,19 @@ const handleCurrentChange = (val) => {
   currentPage.value = val
 }
 
-// 生命周期钩子
-onMounted(async () => {
-  await fetchBehaviorTypes()
-  await fetchTeachers()
+// 添加自动刷新功能
+let refreshInterval = null
+
+onMounted(() => {
+  fetchTeachers()
+  // 每5分钟自动刷新一次
+  refreshInterval = setInterval(fetchTeachers, 5 * 60 * 1000)
+})
+
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
 })
 </script>
 

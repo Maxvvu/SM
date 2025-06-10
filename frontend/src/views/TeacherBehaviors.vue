@@ -248,6 +248,9 @@ import { Search } from '@element-plus/icons-vue'
 import axios from 'axios'
 import moment from 'moment'
 
+// 定义组件事件
+const emits = defineEmits(['score-updated'])
+
 // 状态变量
 const loading = ref(false)
 const submitting = ref(false)
@@ -591,17 +594,40 @@ const handleSubmit = async () => {
 
     console.log('准备提交的数据:', submitData);
 
+    let response;
     if (form.value.id) {
       // 编辑
-      await axios.put(`/api/teacher-behaviors/${form.value.id}`, submitData)
-      ElMessage.success('更新成功')
+      response = await axios.put(`/api/teacher-behaviors/${form.value.id}`, submitData)
+      ElMessage({
+        type: 'success',
+        message: '更新成功',
+        duration: 3000
+      })
     } else {
       // 新增
-      await axios.post('/api/teacher-behaviors', submitData)
-      ElMessage.success('添加成功')
+      response = await axios.post('/api/teacher-behaviors', submitData)
+      ElMessage({
+        type: 'success',
+        message: '添加成功',
+        duration: 3000
+      })
     }
+
+    // 显示分数变化提醒
+    const score = response.data.score || 0
+    const scoreMessage = score > 0 ? `加${score}分` : `减${Math.abs(score)}分`
+    ElMessage({
+      type: score > 0 ? 'success' : 'warning',
+      message: `${submitData.teacher_name}的分数${scoreMessage}`,
+      duration: 5000,
+      showClose: true
+    })
+
     dialogVisible.value = false
     await fetchBehaviors()
+
+    // 触发事件通知其他组件更新
+    emits('score-updated')
   } catch (error) {
     console.error('提交失败:', error);
     if (error.response?.data?.message) {
