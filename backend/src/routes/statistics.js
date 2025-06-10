@@ -1203,6 +1203,60 @@ router.get('/class-scores', authenticateToken, async (req, res, next) => {
   }
 });
 
+// 获取班级分数历史记录
+router.get('/class-score-history/:grade/:class', authenticateToken, async (req, res, next) => {
+  try {
+    const { grade, class: className } = req.params;
+    const { startDate, endDate } = req.query;
+
+    let dateCondition = '';
+    const params = [grade, className];
+
+    if (startDate && endDate) {
+      dateCondition = 'AND date BETWEEN ? AND ?';
+      params.push(startDate, endDate);
+    }
+
+    const query = `
+      WITH RECURSIVE DateRange AS (
+        SELECT 
+          COALESCE(?, DATE('now', '-30 days')) as date
+        UNION ALL
+        SELECT DATE(date, '+1 day')
+        FROM DateRange
+        WHERE date < COALESCE(?, DATE('now'))
+      ),
+      DailyScores AS (
+        SELECT 
+          DATE(tb.date) as date,
+          SUM(tb.score) as daily_change
+        FROM teacher_behaviors tb
+        WHERE tb.teacher_name LIKE ? || ? || '班%'
+        ${dateCondition}
+        GROUP BY DATE(tb.date)
+      )
+      SELECT 
+        dr.date,
+        COALESCE(ds.daily_change, 0) as daily_change,
+        1000 + (
+          SELECT COALESCE(SUM(daily_change), 0)
+          FROM DailyScores ds2
+          WHERE DATE(ds2.date) <= DATE(dr.date)
+        ) as total_score
+      FROM DateRange dr
+      LEFT JOIN DailyScores ds ON dr.date = ds.date
+      ORDER BY dr.date
+    `;
+
+    const history = await get(query, params);
+    
+    res.json(history);
+  } catch (error) {
+    console.error('获取班级分数历史记录失败:', error);
+    next(error);
+  }
+});
+
 // 辅助函数：验证日期格式
 function isValidDate(dateString) {
   const date = new Date(dateString);
