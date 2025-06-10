@@ -393,6 +393,15 @@ const classRankingOption = computed(() => {
   }
 
   const data = analysisData.value.classAnalysis.rankings.top_violation_rate
+  console.log('班级违纪率排名数据:', data)
+  
+  // 如果是筛选了特定班级，则只显示该班级的数据
+  const displayData = selectedClass.value ? 
+    data.filter(item => {
+      const className = item.class === '双优' ? '双优班' : `${item.class}班`
+      return className === selectedClass.value
+    }) : data
+
   return {
     tooltip: {
       trigger: 'axis',
@@ -400,7 +409,12 @@ const classRankingOption = computed(() => {
     },
     xAxis: {
       type: 'category',
-      data: data.map(item => `${item.grade}${item.class}班`),
+      data: displayData.map(item => {
+        if (item.class === '双优') {
+          return `${item.grade}双优班`
+        }
+        return `${item.grade}${item.class}班`
+      }),
       axisLabel: {
         interval: 0,
         rotate: 30
@@ -408,20 +422,24 @@ const classRankingOption = computed(() => {
     },
     yAxis: {
       type: 'value',
-      name: '违纪率(%)'
+      name: '违纪率(%)',
+      min: 0,
+      max: 100
     },
     series: [
       {
-      type: 'bar',
-        data: data.map(item => item.violation_rate),
-        itemStyle: {
-          color: '#FF6B6B'
-        },
-      label: {
-        show: true,
-        position: 'top',
-        formatter: '{c}%'
-      }
+        type: 'bar',
+        data: displayData.map(item => ({
+          value: item.violation_rate,
+          itemStyle: {
+            color: item.class === '双优' ? '#8A2BE2' : '#FF6B6B'
+          }
+        })),
+        label: {
+          show: true,
+          position: 'top',
+          formatter: '{c}%'
+        }
       }
     ]
   }
@@ -434,18 +452,32 @@ const gradeComparisonOption = computed(() => {
   }
 
   const gradeData = analysisData.value.classAnalysis.by_grade
-  const grades = Object.keys(gradeData)
+  console.log('年级违纪情况数据:', gradeData)
+  
+  // 如果选择了特定年级，只显示该年级数据
+  const grades = selectedGrade.value ? 
+    [selectedGrade.value] : 
+    Object.keys(gradeData)
   
   return {
     tooltip: {
-      trigger: 'axis'
+      trigger: 'axis',
+      formatter: function(params) {
+        const grade = params[0].axisValue
+        return `${grade}<br/>` +
+               `平均违纪率: ${params[0].value}%<br/>` +
+               `违纪总数: ${params[1].value}次`
+      }
     },
     legend: {
       data: ['平均违纪率', '违纪总数']
     },
     xAxis: {
       type: 'category',
-      data: grades
+      data: grades,
+      axisLabel: {
+        interval: 0
+      }
     },
     yAxis: [
       {
@@ -464,18 +496,31 @@ const gradeComparisonOption = computed(() => {
       {
         name: '平均违纪率',
         type: 'bar',
-        data: grades.map(grade => gradeData[grade].avg_violation_rate),
-        itemStyle: {
-          color: '#4ECDC4'
+        data: grades.map(grade => ({
+          value: gradeData[grade].avg_violation_rate,
+          itemStyle: {
+            color: '#4ECDC4'
+          }
+        })),
+        label: {
+          show: true,
+          position: 'top',
+          formatter: '{c}%'
         }
       },
       {
         name: '违纪总数',
         type: 'line',
         yAxisIndex: 1,
-        data: grades.map(grade => gradeData[grade].total_violations),
-        itemStyle: {
-          color: '#FF9F43'
+        data: grades.map(grade => ({
+          value: gradeData[grade].total_violations,
+          itemStyle: {
+            color: '#FF9F43'
+          }
+        })),
+        label: {
+          show: true,
+          position: 'top'
         }
       }
     ]
@@ -489,9 +534,14 @@ const trendOption = computed(() => {
   }
 
   const trends = analysisData.value.monthlyTrends
+  console.log('违纪趋势数据:', trends)
+
   return {
     tooltip: {
-      trigger: 'axis'
+      trigger: 'axis',
+      formatter: function(params) {
+        return `${params[0].axisValue}<br/>违纪率: ${params[0].value}%`
+      }
     },
     xAxis: {
       type: 'category',
@@ -503,29 +553,41 @@ const trendOption = computed(() => {
     },
     yAxis: {
       type: 'value',
-      name: '违纪率(%)'
+      name: '违纪率(%)',
+      min: 0,
+      max: 100,
+      axisLabel: {
+        formatter: '{value}%'
+      }
     },
     series: [
       {
-      type: 'line',
-        data: trends.map(item => item.violation_rate),
-      itemStyle: {
-          color: '#52C41A'
-      },
-      areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0,
-          y: 0,
-          x2: 0,
-          y2: 1,
+        type: 'line',
+        data: trends.map(item => ({
+          value: item.violation_rate,
+          itemStyle: {
+            color: '#52C41A'
+          }
+        })),
+        label: {
+          show: true,
+          position: 'top',
+          formatter: '{c}%'
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
             colorStops: [
               {
-            offset: 0,
+                offset: 0,
                 color: 'rgba(82, 196, 26, 0.3)'
               },
               {
-            offset: 1,
+                offset: 1,
                 color: 'rgba(82, 196, 26, 0.1)'
               }
             ]
@@ -648,15 +710,15 @@ const studentViolationDistOption = computed(() => {
   }
 })
 
-
-
 // 违纪原因分析图表配置
 const reasonAnalysisOption = computed(() => {
   if (!analysisData.value?.reasonAnalysis) {
     return {}
   }
 
-  const data = analysisData.value.reasonAnalysis || []
+  const data = analysisData.value.reasonAnalysis
+  console.log('违纪原因分析数据:', data)
+
   return {
     tooltip: {
       trigger: 'axis',
@@ -733,6 +795,8 @@ const fetchClassInfo = async () => {
     
     // 更新班级选项
     updateClassOptions()
+    
+    console.log('班级信息:', classInfo.value)
   } catch (error) {
     console.error('获取年级和班级信息失败:', error)
     ElMessage.error('获取年级和班级信息失败')
@@ -743,12 +807,12 @@ const fetchClassInfo = async () => {
 const updateClassOptions = () => {
   if (selectedGrade.value && classInfo.value[selectedGrade.value]) {
     classOptions.value = classInfo.value[selectedGrade.value].map(classInfo => ({
-      value: classInfo.value,
-      label: `${classInfo.label}班`
+      value: classInfo.class_name || classInfo.value,
+      label: classInfo.class_name === '双优' ? '双优班' : `${classInfo.label}班`
     })).sort((a, b) => {
-      // 确保双优始终排在最前面
-      if (a.label === '双优班') return -1;
-      if (b.label === '双优班') return 1;
+      // 确保双优班始终排在最前面
+      if (a.value === '双优') return -1;
+      if (b.value === '双优') return 1;
       return parseInt(a.value) - parseInt(b.value);
     });
   } else {
@@ -765,10 +829,11 @@ const handleGradeChange = () => {
 
 // 处理班级变化
 const handleClassChange = () => {
+  console.log('选择的班级:', selectedClass.value)
   fetchAnalysisData()
 }
 
-// 更新获取分析数据的函数
+// 获取分析数据
 const fetchAnalysisData = async () => {
   try {
     const params = {}
@@ -780,11 +845,18 @@ const fetchAnalysisData = async () => {
       params.grade = selectedGrade.value
     }
     if (selectedClass.value) {
-      // 从显示值中移除"班"字后传递给后端
-      params.class = selectedClass.value.replace('班', '')
+      // 处理班级参数，确保双优班正确传递
+      params.class = selectedClass.value === '双优班' ? '双优' : selectedClass.value.replace('班', '')
     }
 
+    console.log('发送请求参数:', params)
     const response = await axios.get('/api/statistics/analysis', { params })
+    console.log('获取分析数据响应:', response.data)
+    
+    if (!response || !response.data) {
+      throw new Error('获取数据失败：服务器响应异常')
+    }
+
     analysisData.value = response.data
   } catch (error) {
     console.error('获取分析数据失败:', error)
