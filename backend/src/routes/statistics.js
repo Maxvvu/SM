@@ -111,8 +111,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
           tb.score as score
         FROM students s
         JOIN teacher_behaviors tb ON 
-          REGEXP_SUBSTR(tb.teacher_name, '高[一二三]') = s.grade
-          AND CAST(REGEXP_SUBSTR(tb.teacher_name, '\\d+') AS INTEGER) = s.class
+          SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-1) = s.grade || s.class
         WHERE s.id = ?
         ${dateCondition}
       )
@@ -222,16 +221,8 @@ router.get('/', authenticateToken, async (req, res, next) => {
         
         -- 教师行为记录
         SELECT 
-          CASE 
-            WHEN tb.teacher_name REGEXP '高[一二三]' 
-            THEN REGEXP_SUBSTR(tb.teacher_name, '高[一二三]')
-            ELSE NULL
-          END as grade,
-          CASE 
-            WHEN tb.teacher_name REGEXP '\\d+班' 
-            THEN CAST(REGEXP_SUBSTR(tb.teacher_name, '\\d+') AS INTEGER)
-            ELSE NULL
-          END as class,
+          SUBSTR(tb.teacher_name, 1, 2) as grade,
+          CAST(SUBSTR(tb.teacher_name, 3, INSTR(tb.teacher_name, '班')-3) AS INTEGER) as class,
           CASE 
             WHEN tb.score > 0 THEN '优秀'
             WHEN tb.score < 0 THEN '违纪'
@@ -240,8 +231,8 @@ router.get('/', authenticateToken, async (req, res, next) => {
           COUNT(*) as count,
           SUM(tb.score) as total_score
         FROM teacher_behaviors tb
-        WHERE tb.teacher_name REGEXP '高[一二三]\\d+班'
-        ${grade ? " AND tb.teacher_name REGEXP ?" : ''}
+        WHERE tb.teacher_name LIKE '高__%班'
+        ${grade ? " AND tb.teacher_name LIKE ?" : ''}
         ${dateCondition}
         GROUP BY 
           grade,
@@ -512,8 +503,7 @@ router.get('/student/:id', authenticateToken, async (req, res, next) => {
           tb.score as total_score
         FROM students s
         JOIN teacher_behaviors tb ON 
-          REGEXP_SUBSTR(tb.teacher_name, '高[一二三]') = s.grade
-          AND CAST(REGEXP_SUBSTR(tb.teacher_name, '\\d+') AS INTEGER) = s.class
+          SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-1) = s.grade || s.class
         WHERE s.id = ?
         ${start_date ? ' AND tb.date >= ?' : ''}
         ${end_date ? ' AND tb.date <= ?' : ''}
