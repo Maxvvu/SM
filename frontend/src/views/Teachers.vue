@@ -79,6 +79,14 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="操作" width="120" fixed="right">
+          <template #default="scope">
+            <el-button type="primary" link @click="showScoreDetails(scope.row)">
+              <el-icon><List /></el-icon>
+              分数明细
+            </el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <div class="pagination-container">
@@ -93,13 +101,94 @@
         />
       </div>
     </div>
+
+    <!-- 分数明细对话框 -->
+    <el-dialog
+      v-model="scoreDetailVisible"
+      :title="`${currentTeacher?.name || ''} - 分数变动明细`"
+      width="80%"
+      destroy-on-close
+    >
+      <div class="dialog-content">
+        <div class="dialog-header">
+          <div class="search-filters">
+            <el-select
+              v-model="detailType"
+              placeholder="变动类型"
+              clearable
+              class="detail-type-select"
+            >
+              <el-option label="全部" value="" />
+              <el-option label="加分" value="positive" />
+              <el-option label="扣分" value="negative" />
+            </el-select>
+            <el-date-picker
+              v-model="detailDateRange"
+              type="daterange"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              value-format="YYYY-MM-DD"
+              :shortcuts="dateShortcuts"
+              class="detail-date-picker"
+            />
+          </div>
+          <el-button type="primary" @click="exportScoreDetails">
+            <el-icon><Download /></el-icon>
+            导出数据
+          </el-button>
+        </div>
+
+        <el-table
+          :data="filteredScoreDetails"
+          style="width: 100%"
+          :header-cell-style="{ background: '#f5f7fa' }"
+          v-loading="detailLoading"
+          border
+          stripe
+        >
+          <el-table-column prop="date" label="记录时间" width="180" sortable />
+          <el-table-column prop="class" label="班级" width="120">
+            <template #default="{ row }">
+              {{ row.grade }}年级{{ row.class }}班
+            </template>
+          </el-table-column>
+          <el-table-column prop="student_name" label="学生姓名" width="120" />
+          <el-table-column prop="behavior_type" label="行为类型" width="150">
+            <template #default="{ row }">
+              <el-tag :type="getBehaviorTagType(row.score_change)">
+                {{ row.behavior_type }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="score_change" label="分数变动" width="120">
+            <template #default="{ row }">
+              <span :class="['score-change', row.score_change >= 0 ? 'positive' : 'negative']">
+                {{ row.score_change >= 0 ? '+' : '' }}{{ row.score_change }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="description" label="描述" show-overflow-tooltip />
+        </el-table>
+
+        <div class="dialog-footer">
+          <el-pagination
+            v-model:current-page="detailCurrentPage"
+            v-model:page-size="detailPageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            :total="totalDetailRecords"
+            layout="total, sizes, prev, pager, next, jumper"
+          />
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { Search, List, Download } from '@element-plus/icons-vue'
 import axios from 'axios'
 import moment from 'moment'
 
@@ -114,6 +203,48 @@ const behaviorTypes = ref([])
 const selectedMonth = ref(moment().format('YYYY-MM'))
 const teacherMap = ref(new Map())
 const refreshTimer = ref(null)
+
+// 分数明细相关的响应式变量
+const scoreDetailVisible = ref(false)
+const detailType = ref('')
+const detailDateRange = ref(null)
+const detailLoading = ref(false)
+const scoreDetails = ref([])
+const detailCurrentPage = ref(1)
+const detailPageSize = ref(10)
+const totalDetailRecords = ref(0)
+const currentTeacher = ref(null)
+
+// 日期快捷选项
+const dateShortcuts = [
+  {
+    text: '最近一周',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 7)
+      return [start, end]
+    },
+  },
+  {
+    text: '最近一个月',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 30)
+      return [start, end]
+    },
+  },
+  {
+    text: '最近三个月',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 90)
+      return [start, end]
+    },
+  },
+]
 
 // 禁用未来月份
 const disabledDate = (time) => {
@@ -391,6 +522,99 @@ onUnmounted(() => {
 watch(selectedMonth, () => {
   fetchTeachers()
 })
+
+// 获取行为类型的标签样式
+const getBehaviorTagType = (scoreChange) => {
+  if (scoreChange > 0) return 'success'
+  if (scoreChange < 0) return 'danger'
+  return 'info'
+}
+
+// 计算属性：过滤后的分数明细
+const filteredScoreDetails = computed(() => {
+  let result = [...scoreDetails.value]
+  
+  // 按类型筛选
+  if (detailType.value) {
+    result = result.filter(item => 
+      detailType.value === 'positive' ? item.score_change > 0 : item.score_change < 0
+    )
+  }
+  
+  // 按日期范围筛选
+  if (detailDateRange.value && detailDateRange.value[0] && detailDateRange.value[1]) {
+    const startDate = moment(detailDateRange.value[0]).startOf('day')
+    const endDate = moment(detailDateRange.value[1]).endOf('day')
+    
+    result = result.filter(item => {
+      const itemDate = moment(item.date)
+      return itemDate.isBetween(startDate, endDate, null, '[]')
+    })
+  }
+  
+  totalDetailRecords.value = result.length
+  
+  // 分页
+  const start = (detailCurrentPage.value - 1) * detailPageSize.value
+  return result.slice(start, start + detailPageSize.value)
+})
+
+// 显示分数明细
+const showScoreDetails = async (teacher) => {
+  try {
+    currentTeacher.value = teacher
+    detailLoading.value = true
+    scoreDetailVisible.value = true
+    
+    // 构建请求参数
+    const params = {
+      teacher_name: teacher.name,
+      month: selectedMonth.value
+    }
+    
+    const response = await axios.get('/api/teachers/score-details', { params })
+    scoreDetails.value = response.data.map(item => ({
+      ...item,
+      date: moment(item.date).format('YYYY-MM-DD HH:mm:ss')
+    }))
+  } catch (error) {
+    console.error('获取分数明细失败:', error)
+    ElMessage.error('获取分数明细失败')
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+// 导出分数明细
+const exportScoreDetails = () => {
+  if (!currentTeacher.value) return
+  
+  // 准备导出数据
+  const headers = ['记录时间', '班级', '学生姓名', '行为类型', '分数变动', '描述']
+  const data = scoreDetails.value.map(item => [
+    item.date,
+    `${item.grade}年级${item.class}班`,
+    item.student_name,
+    item.behavior_type,
+    item.score_change,
+    item.description
+  ])
+  
+  // 创建CSV内容
+  const csvContent = [
+    headers.join(','),
+    ...data.map(row => row.join(','))
+  ].join('\n')
+  
+  // 创建并下载文件
+  const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `${currentTeacher.value.name}_分数明细_${selectedMonth.value}.csv`
+  link.click()
+  
+  ElMessage.success('导出成功')
+}
 </script>
 
 <style scoped>
@@ -483,5 +707,47 @@ watch(selectedMonth, () => {
 
 .change.negative {
   color: var(--el-color-danger);
+}
+
+.dialog-content {
+  padding: 0 20px;
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.search-filters {
+  display: flex;
+  gap: 15px;
+}
+
+.detail-type-select {
+  width: 120px;
+}
+
+.detail-date-picker {
+  width: 350px;
+}
+
+.dialog-footer {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.score-change {
+  font-weight: bold;
+}
+
+.score-change.positive {
+  color: #67c23a;
+}
+
+.score-change.negative {
+  color: #f56c6c;
 }
 </style> 
