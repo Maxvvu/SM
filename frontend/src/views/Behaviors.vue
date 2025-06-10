@@ -857,53 +857,51 @@ const handleSubmit = async () => {
         response = await axios.put(`/api/behaviors/${form.value.id}`, requestData)
         console.log('更新响应:', response.data)
         
-        // 更新本地数据时进行时间转换
-        if (response.data) {
-          const updatedData = {
-            ...response.data,
-            date: moment(response.data.date).format('YYYY-MM-DD HH:mm:ss')
-          }
-          const index = behaviors.value.findIndex(b => b.id === form.value.id)
-          if (index !== -1) {
-            behaviors.value[index] = updatedData
-          }
-        }
+        ElMessage.success({
+          message: '行为记录更新成功',
+          type: 'success',
+          duration: 2000
+        })
       } else {
         console.log('执行添加操作')
         response = await axios.post('/api/behaviors', requestData)
         console.log('添加响应:', response.data)
         
-        // 添加新数据时进行时间转换
-        if (response.data) {
-          const newData = {
-            ...response.data,
-            date: moment(response.data.date).format('YYYY-MM-DD HH:mm:ss')
-          }
-          behaviors.value.unshift(newData)
-        }
+        ElMessage.success({
+          message: '行为记录添加成功',
+          type: 'success',
+          duration: 2000
+        })
       }
       
-      ElMessage.success(form.value.id ? '更新成功' : '添加成功')
+      // 关闭对话框
       dialogVisible.value = false
       
       // 重置表单
       resetForm()
+      
+      // 刷新列表数据
+      await fetchBehaviors()
+      
+      // 重置到第一页
+      currentPage.value = 1
+      
     } catch (error) {
       console.error('操作失败:', error)
-      if (error.response?.data?.message) {
-        ElMessage.error(error.response.data.message)
-      } else {
-        ElMessage.error(form.value.id ? '更新失败' : '添加失败')
-      }
+      ElMessage.error({
+        message: error.response?.data?.message || (form.value.id ? '更新失败' : '添加失败'),
+        type: 'error',
+        duration: 3000
+      })
       throw error
     }
   } catch (error) {
     console.error('提交失败:', error)
-    if (error.response?.data?.message) {
-      ElMessage.error(error.response.data.message)
-    } else {
-      ElMessage.error(form.value.id ? '更新失败' : '添加失败')
-    }
+    ElMessage.error({
+      message: error.response?.data?.message || (form.value.id ? '更新失败' : '添加失败'),
+      type: 'error',
+      duration: 3000
+    })
   } finally {
     submitting.value = false
   }
