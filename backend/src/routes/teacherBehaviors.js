@@ -25,17 +25,36 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // 添加新的教师行为记录
 router.post('/', authenticateToken, async (req, res) => {
-  const { teacher_name, behavior_type, description, date, process_result, score } = req.body;
+  const { teacher_name, behavior_type, description, date, process_result } = req.body;
 
+  console.log('收到的请求数据:', req.body);
+
+  // 验证必填字段
   if (!teacher_name || !behavior_type || !description) {
-    return res.status(400).json({ message: '教师姓名、行为类型和描述为必填项' });
+    console.log('缺少必填字段:', {
+      teacher_name: !!teacher_name,
+      behavior_type: !!behavior_type,
+      description: !!description
+    });
+    return res.status(400).json({ 
+      message: '教师姓名、行为类型和描述为必填项',
+      details: {
+        teacher_name: !!teacher_name,
+        behavior_type: !!behavior_type,
+        description: !!description
+      }
+    });
   }
 
   try {
     // 从教师名称中提取年级和班级
     const match = teacher_name.match(/(高[一二三])(\d+)班/);
     if (!match) {
-      return res.status(400).json({ message: '教师名称格式不正确，应包含年级和班级信息（例如：高一1班）' });
+      console.log('教师名称格式不正确:', teacher_name);
+      return res.status(400).json({ 
+        message: '教师名称格式不正确，应包含年级和班级信息（例如：高一1班）',
+        details: { teacher_name }
+      });
     }
 
     const [, grade, classNum] = match;
@@ -48,8 +67,14 @@ router.post('/', authenticateToken, async (req, res) => {
       // 获取行为类型对应的分数项
       const [scoreItem] = await get('SELECT * FROM score_items WHERE name = ?', [behavior_type]);
       if (!scoreItem) {
-        return res.status(400).json({ message: '无效的行为类型' });
+        console.log('无效的行为类型:', behavior_type);
+        return res.status(400).json({ 
+          message: '无效的行为类型',
+          details: { behavior_type }
+        });
       }
+
+      console.log('找到的分数项:', scoreItem);
 
       // 添加教师行为记录
       const result = await run(
@@ -62,8 +87,8 @@ router.post('/', authenticateToken, async (req, res) => {
       console.log('教师行为记录添加成功，ID:', result.lastID);
 
       // 更新班级分数
-      console.log('准备更新班级分数:', { grade, class: classNum, score });
-      await updateClassScore(grade, classNum, score);
+      console.log('准备更新班级分数:', { grade, class: classNum, score: scoreItem.score });
+      await updateClassScore(grade, classNum, scoreItem.score);
       console.log('班级分数更新成功');
 
       // 提交事务
@@ -77,26 +102,22 @@ router.post('/', authenticateToken, async (req, res) => {
         description: '添加教师行为记录成功',
         username: req.user.username,
         status: 'success',
-        details: { behavior: { teacher_name, behavior_type, score }, classInfo: { grade, class: classNum } }
+        details: { behavior: { teacher_name, behavior_type, score: scoreItem.score }, classInfo: { grade, class: classNum } }
       });
 
       res.status(201).json(newBehavior);
     } catch (error) {
       // 如果出错，回滚事务
       await run('ROLLBACK');
+      console.error('数据库操作失败:', error);
       throw error;
     }
   } catch (error) {
-    console.error('添加教师行为记录失败:', error);
-    await logger.logOperation({
-      type: 'ERROR',
-      module: 'teacher-behaviors',
-      description: '添加教师行为记录失败',
-      username: req.user.username,
-      status: 'error',
-      details: { error: error.message, behavior: { teacher_name, behavior_type, score } }
+    console.error('处理教师行为记录失败:', error);
+    res.status(500).json({ 
+      message: '添加教师行为记录失败',
+      details: error.message
     });
-    res.status(500).json({ message: '添加教师行为记录失败' });
   }
 });
 
@@ -162,11 +183,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
         await updateClassScore(oldGrade, oldClassNum, -oldRecord.score);
 
         // 给新班级添加新的分数
-        console.log('给新班级添加分数:', { grade: newGrade, class: newClassNum, score: score });
-        await updateClassScore(newGrade, newClassNum, score);
-      } else {
-        // 同一个班级，只需要更新分数差值
-        const scoreDiff = score - oldRecord.score;
+        console.log('给新班级添加分数:', { grade: newGrade, class: newClassNum, score: scoreItem.score });
+        await updateClassScore(newGrade, newClassNum, scoreItem.score);
+      } else if (oldRecord.score !== scoreItem.score) {
+        // 同一个班级，但分数发生变化
+        const scoreDiff = scoreItem.score - oldRecord.score;
         console.log('更新班级分数差值:', { grade: newGrade, class: newClassNum, scoreDiff });
         await updateClassScore(newGrade, newClassNum, scoreDiff);
       }

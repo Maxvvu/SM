@@ -44,7 +44,14 @@
         <el-table-column prop="teacher_name" label="教师姓名" sortable>
           <template #default="scope">
             <div class="teacher-info">
-              <span>{{ scope.row.teacher_name }}</span>
+              <span>{{ getTeacherName(scope.row.teacher_name) }}</span>
+              <el-tooltip 
+                :content="scope.row.teacher_name" 
+                placement="top"
+                effect="light"
+              >
+                <el-tag size="small" style="margin-left: 8px">{{ scope.row.teacher_name }}</el-tag>
+              </el-tooltip>
             </div>
           </template>
         </el-table-column>
@@ -125,19 +132,20 @@
             placeholder="请选择教师"
             filterable
             style="width: 100%"
-            :disabled="!!form.id"
           >
-            <el-option
-              v-for="teacher in teachers"
-              :key="teacher.name"
-              :label="teacher.name"
-              :value="teacher.name"
-            >
-              <span>{{ teacher.name }}</span>
-              <span style="float: right; color: #8492a6; font-size: 13px">
-                {{ teacher.classes.join('、') }}
-              </span>
-            </el-option>
+            <template v-for="teacher in teachers" :key="teacher.name">
+              <el-option
+                v-for="classInfo in teacher.classes"
+                :key="`${teacher.name}-${classInfo}`"
+                :label="`${teacher.name} (${classInfo})`"
+                :value="classInfo"
+              >
+                <span>{{ teacher.name }}</span>
+                <span style="float: right; color: #8492a6; font-size: 13px">
+                  {{ classInfo }}
+                </span>
+              </el-option>
+            </template>
           </el-select>
         </el-form-item>
         <el-form-item label="行为类型" prop="behavior_type">
@@ -205,7 +213,8 @@
       <div class="detail-content" v-if="selectedBehavior">
         <div class="detail-header">
           <div class="teacher-info">
-            <h3>{{ selectedBehavior.teacher_name }}</h3>
+            <h3>{{ getTeacherName(selectedBehavior.teacher_name) }}</h3>
+            <el-tag size="small">{{ selectedBehavior.teacher_name }}</el-tag>
             <div class="score-info" :class="{ 'positive-score': selectedBehavior.score > 0, 'negative-score': selectedBehavior.score < 0 }">
               {{ selectedBehavior.score > 0 ? '+' : '' }}{{ selectedBehavior.score }}分
             </div>
@@ -242,7 +251,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import axios from 'axios'
@@ -275,7 +284,7 @@ const fetchBehaviorTypes = async () => {
     
     // 更新分数映射
     scoreItemsMap.value = new Map(
-      items.map(item => [item.name, item.score])
+      items.map(item => [item.name, item])
     )
   } catch (error) {
     console.error('获取行为类型列表失败:', error)
@@ -285,13 +294,14 @@ const fetchBehaviorTypes = async () => {
 
 // 获取行为类型对应的分数
 const getScoreByType = (type) => {
-  return scoreItemsMap.value.get(type) || 0
+  const scoreItem = scoreItemsMap.value.get(type)
+  return scoreItem ? scoreItem.score : 0
 }
 
 // 获取行为类型对应的标签类型
 const getBehaviorTagType = (type) => {
   const score = getScoreByType(type)
-  return score >= 0 ? 'success' : 'danger'
+  return score > 0 ? 'success' : (score < 0 ? 'danger' : 'info')
 }
 
 // 日期快捷选项
@@ -346,7 +356,7 @@ const rules = {
   ],
   description: [
     { required: true, message: '请输入描述', trigger: 'blur' },
-    { max: 200, message: '最多输入200个字符', trigger: 'blur' }
+    { min: 2, max: 200, message: '描述长度应在2-200个字符之间', trigger: 'blur' }
   ],
   date: [
     { required: true, message: '请选择时间', trigger: 'change' },
@@ -373,6 +383,16 @@ const rules = {
     }
   ]
 }
+
+// 监听行为类型变化，自动更新分数
+watch(() => form.value.behavior_type, (newType) => {
+  if (newType) {
+    const scoreItem = scoreItemsMap.value.get(newType)
+    if (scoreItem) {
+      form.value.score = scoreItem.score
+    }
+  }
+})
 
 // 过滤后的数据
 const filteredBehaviors = computed(() => {
@@ -432,22 +452,42 @@ const fetchTeachers = async () => {
     const response = await axios.get('/api/students')
     const students = response.data
     
-    // 提取所有不重复的教师名称
-    const teacherSet = new Set()
+    // 提取所有不重复的教师信息
+    const teacherMap = new Map()
     students.forEach(student => {
       if (student.teacher) {
-        teacherSet.add(student.teacher)
+        if (!teacherMap.has(student.teacher)) {
+          teacherMap.set(student.teacher, {
+            name: student.teacher,
+            classes: []
+          })
+        }
+        const teacherData = teacherMap.get(student.teacher)
+        // 将年级转换为高一、高二、高三的格式
+        let gradeText = student.grade
+        if (gradeText.endsWith('级')) {
+          const year = parseInt(gradeText)
+          const currentYear = new Date().getFullYear()
+          const yearDiff = currentYear - year
+          if (yearDiff === 0) gradeText = '高一'
+          else if (yearDiff === 1) gradeText = '高二'
+          else if (yearDiff === 2) gradeText = '高三'
+        }
+        // 如果年级已经是"高一"、"高二"、"高三"格式，直接使用
+        const classInfo = `${gradeText}${student.class}班`
+        if (!teacherData.classes.includes(classInfo)) {
+          teacherData.classes.push(classInfo)
+        }
       }
     })
     
-    // 转换为教师列表
-    teachers.value = Array.from(teacherSet).map(name => ({
-      name,
-      classes: students
-        .filter(s => s.teacher === name)
-        .map(s => `${s.grade}${s.class}班`)
-        .filter((value, index, self) => self.indexOf(value) === index) // 去重
-    }))
+    // 转换为教师列表，并确保每个教师至少有一个班级
+    teachers.value = Array.from(teacherMap.values())
+      .filter(teacher => teacher.classes.length > 0)
+      .map(teacher => ({
+        ...teacher,
+        classes: teacher.classes.sort() // 对班级进行排序
+      }))
   } catch (error) {
     console.error('获取教师列表失败:', error)
     ElMessage.error('获取教师列表失败')
@@ -473,6 +513,18 @@ const handleCurrentChange = (val) => {
 }
 
 const handleAdd = () => {
+  // 确保已经加载了教师列表
+  if (teachers.value.length === 0) {
+    fetchTeachers().then(() => {
+      initAddForm()
+    })
+  } else {
+    initAddForm()
+  }
+}
+
+// 初始化添加表单
+const initAddForm = () => {
   form.value = {
     id: null,
     teacher_name: '',
@@ -486,7 +538,23 @@ const handleAdd = () => {
 }
 
 const handleEdit = (row) => {
-  form.value = { ...row }
+  // 确保已经加载了教师列表
+  if (teachers.value.length === 0) {
+    fetchTeachers().then(() => {
+      loadEditForm(row)
+    })
+  } else {
+    loadEditForm(row)
+  }
+}
+
+// 加载编辑表单数据
+const loadEditForm = (row) => {
+  form.value = { 
+    ...row,
+    // 确保teacher_name使用完整的班级名称
+    teacher_name: row.teacher_name
+  }
   dialogVisible.value = true
 }
 
@@ -529,9 +597,14 @@ const handleSubmit = async () => {
     
     submitting.value = true
     const submitData = {
-      ...form.value,
-      date: form.value.date ? moment(form.value.date).format('YYYY-MM-DD HH:mm:ss') : moment().format('YYYY-MM-DD HH:mm:ss')
+      teacher_name: form.value.teacher_name?.trim(),
+      behavior_type: form.value.behavior_type?.trim(),
+      description: form.value.description?.trim(),
+      date: form.value.date ? moment(form.value.date).format('YYYY-MM-DD HH:mm:ss') : moment().format('YYYY-MM-DD HH:mm:ss'),
+      process_result: form.value.process_result?.trim() || null
     };
+
+    console.log('准备提交的数据:', submitData);
 
     if (form.value.id) {
       // 编辑
@@ -545,11 +618,14 @@ const handleSubmit = async () => {
     dialogVisible.value = false
     await fetchBehaviors()
   } catch (error) {
+    console.error('提交失败:', error);
     if (error.response?.data?.message) {
       ElMessage.error(error.response.data.message)
+      if (error.response.data.details) {
+        console.error('错误详情:', error.response.data.details);
+      }
     } else {
-      console.error('操作失败:', error)
-      ElMessage.error('操作失败')
+      ElMessage.error('操作失败，请检查输入数据是否正确')
     }
   } finally {
     submitting.value = false
@@ -558,6 +634,17 @@ const handleSubmit = async () => {
 
 const formatDate = (date) => {
   return moment(date).format('YYYY-MM-DD HH:mm:ss')
+}
+
+// 添加获取教师姓名的方法
+const getTeacherName = (className) => {
+  // 从教师列表中查找对应班级的教师
+  for (const teacher of teachers.value) {
+    if (teacher.classes.includes(className)) {
+      return teacher.name
+    }
+  }
+  return '未知教师' // 如果找不到对应的教师，返回默认值
 }
 
 // 生命周期钩子
@@ -718,5 +805,100 @@ onMounted(async () => {
   .button-group {
     flex-wrap: wrap;
   }
+}
+
+.teacher-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.teacher-info span {
+  font-weight: 500;
+}
+
+.teacher-info .el-tag {
+  font-size: 12px;
+  height: 20px;
+  line-height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background-color: var(--el-color-info-light-9);
+  border-color: var(--el-color-info-light-8);
+  color: var(--el-text-color-secondary);
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.behavior-detail-dialog .detail-content {
+  padding: 20px;
+}
+
+.behavior-detail-dialog .detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.behavior-detail-dialog .teacher-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.behavior-detail-dialog .teacher-info h3 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--el-text-color-primary);
+}
+
+.behavior-detail-dialog .score-info {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.behavior-detail-dialog .score-info.positive-score {
+  color: var(--el-color-success);
+}
+
+.behavior-detail-dialog .score-info.negative-score {
+  color: var(--el-color-danger);
+}
+
+.behavior-detail-dialog .detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.behavior-detail-dialog .detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.behavior-detail-dialog .detail-item label {
+  font-weight: 500;
+  color: var(--el-text-color-secondary);
+}
+
+.behavior-detail-dialog .detail-item p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.behavior-detail-dialog .detail-item.description p {
+  white-space: pre-wrap;
+}
+
+.behavior-detail-dialog .no-result {
+  color: var(--el-text-color-secondary);
+  font-style: italic;
 }
 </style>

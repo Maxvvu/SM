@@ -104,14 +104,15 @@ router.get('/', authenticateToken, async (req, res, next) => {
         SELECT 
           s.id as student_id,
           CASE 
-            WHEN tb.score > 0 THEN '优秀'
-            WHEN tb.score < 0 THEN '违纪'
+            WHEN si.score > 0 THEN '优秀'
+            WHEN si.score < 0 THEN '违纪'
             ELSE '其他'
           END as category,
-          tb.score as score
+          si.score as score
         FROM students s
         JOIN teacher_behaviors tb ON 
           SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-1) = s.grade || s.class
+        JOIN score_items si ON tb.score_item_id = si.id
         WHERE s.id = ?
         ${dateCondition}
       )
@@ -149,13 +150,14 @@ router.get('/', authenticateToken, async (req, res, next) => {
         SELECT 
           tb.behavior_type as name,
           CASE 
-            WHEN tb.score > 0 THEN '优秀'
-            WHEN tb.score < 0 THEN '违纪'
+            WHEN si.score > 0 THEN '优秀'
+            WHEN si.score < 0 THEN '违纪'
             ELSE '其他'
           END as category,
           COUNT(*) as count,
-          SUM(tb.score) as total_score
+          SUM(si.score) as total_score
         FROM teacher_behaviors tb
+        JOIN score_items si ON tb.score_item_id = si.id
         WHERE tb.teacher_name LIKE '%班%'
         ${dateCondition}
         AND SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-3) IN (
@@ -224,13 +226,14 @@ router.get('/', authenticateToken, async (req, res, next) => {
           SUBSTR(tb.teacher_name, 1, 2) as grade,
           CAST(SUBSTR(tb.teacher_name, 3, INSTR(tb.teacher_name, '班')-3) AS INTEGER) as class,
           CASE 
-            WHEN tb.score > 0 THEN '优秀'
-            WHEN tb.score < 0 THEN '违纪'
+            WHEN si.score > 0 THEN '优秀'
+            WHEN si.score < 0 THEN '违纪'
             ELSE '其他'
           END as category,
           COUNT(*) as count,
-          SUM(tb.score) as total_score
+          SUM(si.score) as total_score
         FROM teacher_behaviors tb
+        JOIN score_items si ON tb.score_item_id = si.id
         WHERE tb.teacher_name LIKE '高__%班'
         ${grade ? " AND tb.teacher_name LIKE ?" : ''}
         ${dateCondition}
@@ -244,7 +247,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
         class,
         COUNT(behavior_id) as count,
         COUNT(DISTINCT student_id) as student_count,
-        SUM(score) as total_score
+        SUM(total_score) as total_score
       FROM AllViolations
       GROUP BY grade, class
       ORDER BY count DESC
@@ -415,13 +418,14 @@ router.get('/class', authenticateToken, async (req, res, next) => {
             ELSE NULL
           END as class,
           CASE 
-            WHEN tb.score > 0 THEN '优秀'
-            WHEN tb.score < 0 THEN '违纪'
+            WHEN si.score > 0 THEN '优秀'
+            WHEN si.score < 0 THEN '违纪'
             ELSE '其他'
           END as category,
           COUNT(*) as count,
-          SUM(tb.score) as total_score
+          SUM(si.score) as total_score
         FROM teacher_behaviors tb
+        JOIN score_items si ON tb.score_item_id = si.id
         WHERE tb.teacher_name REGEXP '高[一二三]\\d+班'
         ${grade ? " AND tb.teacher_name REGEXP ?" : ''}
         ${start_date ? ' AND tb.date >= ?' : ''}
@@ -495,18 +499,19 @@ router.get('/student/:id', authenticateToken, async (req, res, next) => {
           s.class,
           tb.behavior_type,
           CASE 
-            WHEN tb.score > 0 THEN '优秀'
-            WHEN tb.score < 0 THEN '违纪'
+            WHEN si.score > 0 THEN '优秀'
+            WHEN si.score < 0 THEN '违纪'
             ELSE '其他'
           END as category,
           COUNT(*) as count,
-          tb.score as total_score
+          si.score as total_score
         FROM students s
         JOIN teacher_behaviors tb ON 
           SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-1) = s.grade || s.class
+        JOIN score_items si ON tb.score_item_id = si.id
         WHERE s.id = ?
-        ${start_date ? ' AND tb.date >= ?' : ''}
-        ${end_date ? ' AND tb.date <= ?' : ''}
+        ${start_date ? ' AND si.date >= ?' : ''}
+        ${end_date ? ' AND si.date <= ?' : ''}
         GROUP BY tb.behavior_type
       )
       SELECT 
