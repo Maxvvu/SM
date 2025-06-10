@@ -44,14 +44,7 @@
         <el-table-column prop="teacher_name" label="教师姓名" sortable>
           <template #default="scope">
             <div class="teacher-info">
-              <span>{{ getTeacherName(scope.row.teacher_name) }}</span>
-              <el-tooltip 
-                :content="scope.row.teacher_name" 
-                placement="top"
-                effect="light"
-              >
-                <el-tag size="small" style="margin-left: 8px">{{ scope.row.teacher_name }}</el-tag>
-              </el-tooltip>
+              <span>{{ getTeacherDisplayName(scope.row.teacher_name) }}</span>
             </div>
           </template>
         </el-table-column>
@@ -67,24 +60,6 @@
             <span :class="{ 'positive-score': scope.row.score > 0, 'negative-score': scope.row.score < 0 }">
               {{ scope.row.score > 0 ? '+' : ''}}{{ scope.row.score }}
             </span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="class_score" label="班级总分" width="200">
-          <template #default="scope">
-            <div class="score-container">
-              <div class="score-info">
-                <span class="base-score">基础分：1000</span>
-                <el-divider direction="vertical" />
-                <span :class="['current-score', scope.row.class_score < 1000 ? 'negative' : 'positive']">
-                  当前：{{ scope.row.class_score }}
-                </span>
-              </div>
-              <div class="score-change">
-                <span :class="['change', scope.row.score >= 0 ? 'positive' : 'negative']">
-                  {{ scope.row.score >= 0 ? '+' : '' }}{{ scope.row.score }}
-                </span>
-              </div>
-            </div>
           </template>
         </el-table-column>
         <el-table-column prop="description" label="描述" show-overflow-tooltip />
@@ -151,19 +126,17 @@
             filterable
             style="width: 100%"
           >
-            <template v-for="teacher in teachers" :key="teacher.name">
-              <el-option
-                v-for="classInfo in teacher.classes"
-                :key="`${teacher.name}-${classInfo}`"
-                :label="`${teacher.name} (${classInfo})`"
-                :value="classInfo"
-              >
-                <span>{{ teacher.name }}</span>
-                <span style="float: right; color: #8492a6; font-size: 13px">
-                  {{ classInfo }}
-                </span>
-              </el-option>
-            </template>
+            <el-option
+              v-for="teacher in teachers"
+              :key="teacher.name"
+              :label="teacher.name"
+              :value="teacher.classes[0]"
+            >
+              <span>{{ teacher.name }}</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">
+                {{ teacher.classes.join('、') }}
+              </span>
+            </el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="行为类型" prop="behavior_type">
@@ -225,44 +198,43 @@
     <el-dialog
       v-model="detailDialogVisible"
       title="行为记录详情"
-      width="800px"
+      width="600px"
       class="behavior-detail-dialog"
     >
-      <div v-if="selectedBehavior" class="detail-content">
+      <div class="detail-content" v-if="selectedBehavior">
         <div class="detail-header">
           <div class="teacher-info">
-            <h3>{{ getTeacherName(selectedBehavior.teacher_name) }}</h3>
+            <h3>{{ getTeacherDisplayName(selectedBehavior.teacher_name) }}</h3>
             <el-tag size="small">{{ selectedBehavior.teacher_name }}</el-tag>
+            <div class="score-info" :class="{ 'positive-score': selectedBehavior.score > 0, 'negative-score': selectedBehavior.score < 0 }">
+              {{ selectedBehavior.score > 0 ? '+' : '' }}{{ selectedBehavior.score }}分
+            </div>
           </div>
           <div class="behavior-type">
             <el-tag :type="getBehaviorTagType(selectedBehavior.behavior_type)" size="large">
               {{ selectedBehavior.behavior_type }}
             </el-tag>
-            <span :class="['score', selectedBehavior.score >= 0 ? 'positive' : 'negative']">
-              {{ selectedBehavior.score >= 0 ? '+' : '' }}{{ selectedBehavior.score }}分
-            </span>
           </div>
         </div>
 
         <el-divider />
 
-        <div class="detail-section">
-          <h4>描述</h4>
-          <p>{{ selectedBehavior.description }}</p>
-        </div>
+        <div class="detail-body">
+          <div class="detail-item description">
+            <label>行为描述</label>
+            <p>{{ selectedBehavior.description }}</p>
+          </div>
+          
+          <div class="detail-item process-result">
+            <label>处理结果</label>
+            <p v-if="selectedBehavior.process_result">{{ selectedBehavior.process_result }}</p>
+            <p v-else class="no-result">暂未处理</p>
+          </div>
 
-        <div class="detail-section">
-          <h4>处理结果</h4>
-          <p v-if="selectedBehavior.process_result">{{ selectedBehavior.process_result }}</p>
-          <p v-else class="no-result">暂无处理结果</p>
-        </div>
-
-        <div class="detail-section">
-          <h4>班级分数历史</h4>
-          <ClassScoreChart 
-            :grade="getClassGrade(selectedBehavior.teacher_name)"
-            :class="getClassNumber(selectedBehavior.teacher_name)"
-          />
+          <div class="detail-item">
+            <label>记录时间</label>
+            <p>{{ formatDate(selectedBehavior.date) }}</p>
+          </div>
         </div>
       </div>
     </el-dialog>
@@ -272,10 +244,9 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus } from '@element-plus/icons-vue'
+import { Search } from '@element-plus/icons-vue'
 import axios from 'axios'
 import moment from 'moment'
-import ClassScoreChart from '../components/ClassScoreChart.vue'
 
 // 状态变量
 const loading = ref(false)
@@ -293,8 +264,6 @@ const formRef = ref(null)
 // 行为类型列表（从加减分项获取）
 const behaviorTypes = ref([])
 const scoreItemsMap = ref(new Map())
-// 添加班级分数状态
-const classScores = ref([])
 
 // 获取行为类型列表
 const fetchBehaviorTypes = async () => {
@@ -495,7 +464,6 @@ const fetchTeachers = async () => {
           else if (yearDiff === 1) gradeText = '高二'
           else if (yearDiff === 2) gradeText = '高三'
         }
-        // 如果年级已经是"高一"、"高二"、"高三"格式，直接使用
         const classInfo = `${gradeText}${student.class}班`
         if (!teacherData.classes.includes(classInfo)) {
           teacherData.classes.push(classInfo)
@@ -503,40 +471,12 @@ const fetchTeachers = async () => {
       }
     })
     
-    // 转换为教师列表，并确保每个教师至少有一个班级
+    // 转换为教师列表
     teachers.value = Array.from(teacherMap.values())
-      .filter(teacher => teacher.classes.length > 0)
-      .map(teacher => ({
-        ...teacher,
-        classes: teacher.classes.sort() // 对班级进行排序
-      }))
   } catch (error) {
     console.error('获取教师列表失败:', error)
     ElMessage.error('获取教师列表失败')
   }
-}
-
-// 获取班级分数
-const fetchClassScores = async () => {
-  try {
-    const response = await axios.get('/api/statistics/class-scores')
-    classScores.value = response.data
-  } catch (error) {
-    console.error('获取班级分数失败:', error)
-    ElMessage.error('获取班级分数失败')
-  }
-}
-
-// 获取班级分数
-const getClassScore = (className) => {
-  const match = className.match(/(高[一二三])(\d+)班/)
-  if (!match) return null
-  
-  const [, grade, classNum] = match
-  const classScore = classScores.value.find(
-    score => score.grade === grade && score.class === classNum
-  )
-  return classScore ? classScore.total_score : 1000
 }
 
 // 事件处理函数
@@ -617,10 +557,7 @@ const handleDelete = (row) => {
       try {
         await axios.delete(`/api/teacher-behaviors/${row.id}`)
         ElMessage.success('删除成功')
-        await Promise.all([
-          fetchBehaviors(),
-          fetchClassScores()
-        ])
+            await fetchBehaviors()
       } catch (error) {
         console.error('删除失败:', error)
         ElMessage.error('删除失败')
@@ -644,19 +581,12 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     
     submitting.value = true
-    // 获取行为类型对应的分数
-    const scoreItem = scoreItemsMap.value.get(form.value.behavior_type?.trim())
-    if (!scoreItem) {
-      throw new Error('无效的行为类型')
-    }
-
     const submitData = {
       teacher_name: form.value.teacher_name?.trim(),
       behavior_type: form.value.behavior_type?.trim(),
       description: form.value.description?.trim(),
       date: form.value.date ? moment(form.value.date).format('YYYY-MM-DD HH:mm:ss') : moment().format('YYYY-MM-DD HH:mm:ss'),
-      process_result: form.value.process_result?.trim() || null,
-      score: scoreItem.score
+      process_result: form.value.process_result?.trim() || null
     };
 
     console.log('准备提交的数据:', submitData);
@@ -671,10 +601,7 @@ const handleSubmit = async () => {
       ElMessage.success('添加成功')
     }
     dialogVisible.value = false
-    await Promise.all([
-      fetchBehaviors(),
-      fetchClassScores()
-    ])
+    await fetchBehaviors()
   } catch (error) {
     console.error('提交失败:', error);
     if (error.response?.data?.message) {
@@ -683,7 +610,7 @@ const handleSubmit = async () => {
         console.error('错误详情:', error.response.data.details);
       }
     } else {
-      ElMessage.error(error.message || '操作失败，请检查输入数据是否正确')
+      ElMessage.error('操作失败，请检查输入数据是否正确')
     }
   } finally {
     submitting.value = false
@@ -694,27 +621,15 @@ const formatDate = (date) => {
   return moment(date).format('YYYY-MM-DD HH:mm:ss')
 }
 
-// 添加获取教师姓名的方法
-const getTeacherName = (className) => {
+// 获取教师显示名称
+const getTeacherDisplayName = (className) => {
   // 从教师列表中查找对应班级的教师
   for (const teacher of teachers.value) {
     if (teacher.classes.includes(className)) {
       return teacher.name
     }
   }
-  return '未知教师' // 如果找不到对应的教师，返回默认值
-}
-
-// 从教师名称中提取年级
-const getClassGrade = (teacherName) => {
-  const match = teacherName.match(/(高[一二三])/);
-  return match ? match[1] : '';
-}
-
-// 从教师名称中提取班级号
-const getClassNumber = (teacherName) => {
-  const match = teacherName.match(/(\d+)班/);
-  return match ? match[1] : '';
+  return className // 如果找不到对应的教师，返回原始值
 }
 
 // 生命周期钩子
@@ -722,8 +637,7 @@ onMounted(async () => {
   await Promise.all([
     fetchBehaviors(),
     fetchTeachers(),
-    fetchBehaviorTypes(),
-    fetchClassScores()
+    fetchBehaviorTypes()
   ])
 })
 </script>
@@ -971,50 +885,5 @@ onMounted(async () => {
 .behavior-detail-dialog .no-result {
   color: var(--el-text-color-secondary);
   font-style: italic;
-}
-
-.score-container {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.score-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.base-score {
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-}
-
-.current-score {
-  font-weight: 500;
-}
-
-.current-score.positive {
-  color: var(--el-color-success);
-}
-
-.current-score.negative {
-  color: var(--el-color-danger);
-}
-
-.score-change {
-  font-size: 13px;
-}
-
-.score-change .change {
-  font-weight: 500;
-}
-
-.score-change .positive {
-  color: var(--el-color-success);
-}
-
-.score-change .negative {
-  color: var(--el-color-danger);
 }
 </style>

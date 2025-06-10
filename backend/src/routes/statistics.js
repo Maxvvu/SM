@@ -113,14 +113,13 @@ router.get('/', authenticateToken, async (req, res, next) => {
         JOIN teacher_behaviors tb ON 
           SUBSTR(tb.teacher_name, 1, INSTR(tb.teacher_name, '班')-1) = s.grade || s.class
         JOIN score_items si ON tb.score_item_id = si.id
-        WHERE s.id = ?
-        ${dateCondition}
+        WHERE 1=1 ${dateCondition}
       )
       SELECT 
         category,
         COUNT(*) as total_count,
         COUNT(DISTINCT student_id) as student_count,
-        ROUND(COUNT(*) * 100.0 / ${studentCount.count}, 2) as percentage,
+        ROUND(COUNT(*) * 100.0 / NULLIF(${studentCount.count}, 0), 2) as percentage,
         ROUND(SUM(score), 2) as total_score
       FROM AllBehaviors
       GROUP BY category
@@ -225,29 +224,21 @@ router.get('/', authenticateToken, async (req, res, next) => {
         SELECT 
           SUBSTR(tb.teacher_name, 1, 2) as grade,
           CAST(SUBSTR(tb.teacher_name, 3, INSTR(tb.teacher_name, '班')-3) AS INTEGER) as class,
-          CASE 
-            WHEN si.score > 0 THEN '优秀'
-            WHEN si.score < 0 THEN '违纪'
-            ELSE '其他'
-          END as category,
-          COUNT(*) as count,
-          SUM(si.score) as total_score
+          NULL as student_id,
+          NULL as behavior_id,
+          si.score
         FROM teacher_behaviors tb
         JOIN score_items si ON tb.score_item_id = si.id
         WHERE tb.teacher_name LIKE '高__%班'
-        ${grade ? " AND tb.teacher_name LIKE ?" : ''}
         ${dateCondition}
-        GROUP BY 
-          grade,
-          class,
-          category
+        AND si.score < 0
       )
       SELECT 
         grade,
         class,
         COUNT(behavior_id) as count,
         COUNT(DISTINCT student_id) as student_count,
-        SUM(total_score) as total_score
+        ROUND(SUM(score), 2) as total_score
       FROM AllViolations
       GROUP BY grade, class
       ORDER BY count DESC
@@ -1200,60 +1191,6 @@ router.get('/class-scores', authenticateToken, async (req, res, next) => {
     res.json(classScores);
   } catch (err) {
     next(err);
-  }
-});
-
-// 获取班级分数历史记录
-router.get('/class-score-history/:grade/:class', authenticateToken, async (req, res, next) => {
-  try {
-    const { grade, class: className } = req.params;
-    const { startDate, endDate } = req.query;
-
-    let dateCondition = '';
-    const params = [grade, className];
-
-    if (startDate && endDate) {
-      dateCondition = 'AND date BETWEEN ? AND ?';
-      params.push(startDate, endDate);
-    }
-
-    const query = `
-      WITH RECURSIVE DateRange AS (
-        SELECT 
-          COALESCE(?, DATE('now', '-30 days')) as date
-        UNION ALL
-        SELECT DATE(date, '+1 day')
-        FROM DateRange
-        WHERE date < COALESCE(?, DATE('now'))
-      ),
-      DailyScores AS (
-        SELECT 
-          DATE(tb.date) as date,
-          SUM(tb.score) as daily_change
-        FROM teacher_behaviors tb
-        WHERE tb.teacher_name LIKE ? || ? || '班%'
-        ${dateCondition}
-        GROUP BY DATE(tb.date)
-      )
-      SELECT 
-        dr.date,
-        COALESCE(ds.daily_change, 0) as daily_change,
-        1000 + (
-          SELECT COALESCE(SUM(daily_change), 0)
-          FROM DailyScores ds2
-          WHERE DATE(ds2.date) <= DATE(dr.date)
-        ) as total_score
-      FROM DateRange dr
-      LEFT JOIN DailyScores ds ON dr.date = ds.date
-      ORDER BY dr.date
-    `;
-
-    const history = await get(query, params);
-    
-    res.json(history);
-  } catch (error) {
-    console.error('获取班级分数历史记录失败:', error);
-    next(error);
   }
 });
 

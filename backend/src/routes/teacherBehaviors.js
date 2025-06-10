@@ -25,25 +25,23 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // 添加新的教师行为记录
 router.post('/', authenticateToken, async (req, res) => {
-  const { teacher_name, behavior_type, description, date, process_result, score } = req.body;
+  const { teacher_name, behavior_type, description, date, process_result } = req.body;
 
   console.log('收到的请求数据:', req.body);
 
   // 验证必填字段
-  if (!teacher_name || !behavior_type || !description || score === undefined) {
+  if (!teacher_name || !behavior_type || !description) {
     console.log('缺少必填字段:', {
       teacher_name: !!teacher_name,
       behavior_type: !!behavior_type,
-      description: !!description,
-      score: score !== undefined
+      description: !!description
     });
     return res.status(400).json({ 
-      message: '教师姓名、行为类型、描述和分数为必填项',
+      message: '教师姓名、行为类型和描述为必填项',
       details: {
         teacher_name: !!teacher_name,
         behavior_type: !!behavior_type,
-        description: !!description,
-        score: score !== undefined
+        description: !!description
       }
     });
   }
@@ -83,14 +81,14 @@ router.post('/', authenticateToken, async (req, res) => {
         `INSERT INTO teacher_behaviors 
          (teacher_name, behavior_type, description, date, process_result, score, score_item_id)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [teacher_name, behavior_type, description, date, process_result, score, scoreItem.id]
+        [teacher_name, behavior_type, description, date, process_result, scoreItem.score, scoreItem.id]
       );
 
       console.log('教师行为记录添加成功，ID:', result.lastID);
 
       // 更新班级分数
-      console.log('准备更新班级分数:', { grade, class: classNum, score });
-      await updateClassScore(grade, classNum, score);
+      console.log('准备更新班级分数:', { grade, class: classNum, score: scoreItem.score });
+      await updateClassScore(grade, classNum, scoreItem.score);
       console.log('班级分数更新成功');
 
       // 提交事务
@@ -104,7 +102,7 @@ router.post('/', authenticateToken, async (req, res) => {
         description: '添加教师行为记录成功',
         username: req.user.username,
         status: 'success',
-        details: { behavior: { teacher_name, behavior_type, score }, classInfo: { grade, class: classNum } }
+        details: { behavior: { teacher_name, behavior_type, score: scoreItem.score }, classInfo: { grade, class: classNum } }
       });
 
       res.status(201).json(newBehavior);
@@ -115,16 +113,11 @@ router.post('/', authenticateToken, async (req, res) => {
       throw error;
     }
   } catch (error) {
-    console.error('添加教师行为记录失败:', error);
-    await logger.logOperation({
-      type: 'ERROR',
-      module: 'teacher-behaviors',
-      description: '添加教师行为记录失败',
-      username: req.user.username,
-      status: 'error',
-      details: { error: error.message, behavior: { teacher_name, behavior_type, score } }
+    console.error('处理教师行为记录失败:', error);
+    res.status(500).json({ 
+      message: '添加教师行为记录失败',
+      details: error.message
     });
-    res.status(500).json({ message: '添加教师行为记录失败' });
   }
 });
 
@@ -133,8 +126,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { teacher_name, behavior_type, description, date, process_result, score } = req.body;
 
-  if (!teacher_name || !behavior_type || !description || score === undefined) {
-    return res.status(400).json({ message: '教师姓名、行为类型、描述和分数为必填项' });
+  if (!teacher_name || !behavior_type || !description) {
+    return res.status(400).json({ message: '教师姓名、行为类型和描述为必填项' });
   }
 
   try {
@@ -160,7 +153,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     console.log('更新前后的班级信息:', {
       old: { grade: oldGrade, class: oldClassNum, score: oldRecord.score },
-      new: { grade: newGrade, class: newClassNum, score }
+      new: { grade: newGrade, class: newClassNum, score: score }
     });
 
     // 开始数据库事务
@@ -180,7 +173,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
              date = ?, process_result = ?, score = ?, score_item_id = ?,
              updated_at = datetime(CURRENT_TIMESTAMP,'localtime')
          WHERE id = ?`,
-        [teacher_name, behavior_type, description, date, process_result, score, scoreItem.id, id]
+        [teacher_name, behavior_type, description, date, process_result, scoreItem.score, scoreItem.id, id]
       );
 
       // 如果班级发生变化，需要更新两个班级的分数
@@ -190,11 +183,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
         await updateClassScore(oldGrade, oldClassNum, -oldRecord.score);
 
         // 给新班级添加新的分数
-        console.log('给新班级添加分数:', { grade: newGrade, class: newClassNum, score });
-        await updateClassScore(newGrade, newClassNum, score);
-      } else if (oldRecord.score !== score) {
+        console.log('给新班级添加分数:', { grade: newGrade, class: newClassNum, score: scoreItem.score });
+        await updateClassScore(newGrade, newClassNum, scoreItem.score);
+      } else if (oldRecord.score !== scoreItem.score) {
         // 同一个班级，但分数发生变化
-        const scoreDiff = score - oldRecord.score;
+        const scoreDiff = scoreItem.score - oldRecord.score;
         console.log('更新班级分数差值:', { grade: newGrade, class: newClassNum, scoreDiff });
         await updateClassScore(newGrade, newClassNum, scoreDiff);
       }
