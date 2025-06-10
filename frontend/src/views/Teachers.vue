@@ -97,7 +97,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import axios from 'axios'
@@ -113,6 +113,7 @@ const behaviors = ref([])
 const behaviorTypes = ref([])
 const selectedMonth = ref(moment().format('YYYY-MM'))
 const teacherMap = ref(new Map())
+const refreshTimer = ref(null)
 
 // 禁用未来月份
 const disabledDate = (time) => {
@@ -357,19 +358,38 @@ const handleCurrentChange = (val) => {
   currentPage.value = val
 }
 
-// 添加自动刷新功能
-let refreshInterval = null
+// 添加自动刷新函数
+const startAutoRefresh = () => {
+  // 清除现有的定时器
+  if (refreshTimer.value) {
+    clearInterval(refreshTimer.value)
+  }
+  // 每30秒自动刷新一次
+  refreshTimer.value = setInterval(fetchTeachers, 30000)
+}
 
+// 停止自动刷新
+const stopAutoRefresh = () => {
+  if (refreshTimer.value) {
+    clearInterval(refreshTimer.value)
+    refreshTimer.value = null
+  }
+}
+
+// 在组件挂载时启动自动刷新
 onMounted(() => {
   fetchTeachers()
-  // 每5分钟自动刷新一次
-  refreshInterval = setInterval(fetchTeachers, 5 * 60 * 1000)
+  startAutoRefresh()
 })
 
+// 在组件卸载时停止自动刷新
 onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
+  stopAutoRefresh()
+})
+
+// 监听月份变化
+watch(selectedMonth, () => {
+  fetchTeachers()
 })
 </script>
 

@@ -242,7 +242,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import axios from 'axios'
@@ -264,9 +264,9 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const selectedBehavior = ref(null)
 const formRef = ref(null)
-// 行为类型列表（从加减分项获取）
 const behaviorTypes = ref([])
 const scoreItemsMap = ref(new Map())
+const refreshTimer = ref(null)
 
 // 获取行为类型列表
 const fetchBehaviorTypes = async () => {
@@ -658,13 +658,42 @@ const getTeacherDisplayName = (className) => {
   return className // 如果找不到对应的教师，返回原始值
 }
 
-// 生命周期钩子
+// 添加自动刷新函数
+const startAutoRefresh = () => {
+  // 清除现有的定时器
+  if (refreshTimer.value) {
+    clearInterval(refreshTimer.value)
+  }
+  // 每30秒自动刷新一次
+  refreshTimer.value = setInterval(fetchBehaviors, 30000)
+}
+
+// 停止自动刷新
+const stopAutoRefresh = () => {
+  if (refreshTimer.value) {
+    clearInterval(refreshTimer.value)
+    refreshTimer.value = null
+  }
+}
+
+// 在组件挂载时启动自动刷新
 onMounted(async () => {
   await Promise.all([
     fetchBehaviors(),
     fetchTeachers(),
     fetchBehaviorTypes()
   ])
+  startAutoRefresh()
+})
+
+// 在组件卸载时停止自动刷新
+onUnmounted(() => {
+  stopAutoRefresh()
+})
+
+// 监听日期范围变化
+watch(dateRange, () => {
+  fetchBehaviors()
 })
 </script>
 

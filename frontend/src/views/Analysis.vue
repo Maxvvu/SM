@@ -84,12 +84,12 @@
     </el-row>
 
     <!-- 班级分析部分 -->
-    <el-row :gutter="20" class="chart-row">
+    <el-row :gutter="24" class="chart-row">
       <el-col :span="12">
-        <el-card class="chart-card">
+        <el-card class="chart-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>班级违纪率排名</span>
+              <span class="card-title">班级违纪率排名</span>
             </div>
           </template>
           <div class="chart-container">
@@ -98,10 +98,10 @@
         </el-card>
       </el-col>
       <el-col :span="12">
-        <el-card class="chart-card">
+        <el-card class="chart-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>年级违纪情况对比</span>
+              <span class="card-title">年级违纪情况对比</span>
             </div>
           </template>
           <div class="chart-container">
@@ -111,12 +111,12 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" class="chart-row">
+    <el-row :gutter="24" class="chart-row">
       <el-col :span="12">
-        <el-card class="chart-card">
+        <el-card class="chart-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>班级违纪趋势分析</span>
+              <span class="card-title">班级违纪趋势分析</span>
             </div>
           </template>
           <div class="chart-container">
@@ -125,65 +125,10 @@
         </el-card>
       </el-col>
       <el-col :span="12">
-        <el-card class="chart-card">
+        <el-card class="chart-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>违纪类型分布</span>
-            </div>
-          </template>
-          <div class="chart-container">
-            <VChart :option="typeDistributionOption" autoresize />
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <!-- 其他分析图表 -->
-    <el-row :gutter="20" class="chart-row">
-      <el-col :span="12">
-        <el-card class="chart-card">
-          <template #header>
-            <div class="card-header">
-              <span>违纪类型趋势</span>
-            </div>
-          </template>
-          <div class="chart-container">
-            <VChart :option="violationTypeTrendOption" autoresize />
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="12">
-        <el-card class="chart-card">
-          <template #header>
-            <div class="card-header">
-              <span>学生违纪频次分布</span>
-            </div>
-          </template>
-          <div class="chart-container">
-            <VChart :option="studentViolationDistOption" autoresize />
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <el-row :gutter="20" class="chart-row">
-      <el-col :span="12">
-        <el-card class="chart-card">
-          <template #header>
-            <div class="card-header">
-              <span>违纪时段分布</span>
-            </div>
-          </template>
-          <div class="chart-container">
-            <VChart :option="timeDistributionOption" autoresize />
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="12">
-        <el-card class="chart-card">
-          <template #header>
-            <div class="card-header">
-              <span>违纪原因分析</span>
+              <span class="card-title">违纪原因分析</span>
             </div>
           </template>
           <div class="chart-container">
@@ -591,131 +536,6 @@ const trendOption = computed(() => {
   }
 })
 
-// 违纪类型分布图表配置
-const typeDistributionOption = computed(() => {
-  if (!analysisData.value?.violationTypeDist) {
-    return {}
-  }
-
-  const data = analysisData.value.violationTypeDist
-  const colors = [
-    '#FF6B6B', '#FF8787', '#FFA5A5',  // 红色系
-    '#FF9F43', '#FFC069', '#FFE0B2',  // 橙色系
-    '#4ECDC4', '#45B7D1', '#96CEB4',  // 蓝绿色系
-    '#52C41A', '#73D13D', '#95DE64'   // 绿色系
-  ]
-
-  return {
-    tooltip: {
-      trigger: 'item',
-      formatter: (params) => {
-        return `${params.name}<br/>` +
-               `次数：${params.value}次<br/>` +
-               `占比：${params.data.percentage}%`
-      }
-    },
-    legend: {
-      type: 'scroll',
-      orient: 'vertical',
-      right: 10,
-      top: 'center',
-      formatter: (name) => {
-        const item = data.find(d => d.type_name === name)
-        return `${name} (${item ? item.count : 0}次)`
-      }
-    },
-    series: [
-      {
-        type: 'pie',
-        radius: ['40%', '70%'],
-        avoidLabelOverlap: true,
-        itemStyle: {
-          borderRadius: 10,
-          borderColor: '#fff',
-          borderWidth: 2
-        },
-        label: {
-          show: true,
-          position: 'outside',
-          formatter: (params) => {
-            return `${params.name}\n${params.percent}%`
-          }
-        },
-        emphasis: {
-          label: {
-            show: true,
-            fontSize: 16,
-            fontWeight: 'bold'
-          },
-          itemStyle: {
-            shadowBlur: 10,
-            shadowOffsetX: 0,
-            shadowColor: 'rgba(0, 0, 0, 0.5)'
-          }
-        },
-        data: data.map((item, index) => ({
-          name: item.type_name,
-          value: item.count,
-          percentage: item.percentage,
-          itemStyle: {
-            color: colors[index % colors.length]
-          }
-        }))
-      }
-    ]
-  }
-})
-
-// 违纪类型趋势图表配置
-const violationTypeTrendOption = computed(() => {
-  if (!analysisData.value?.violationTypeTrends) {
-    return {}
-  }
-
-  const trends = analysisData.value.violationTypeTrends || []
-  const types = [...new Set(trends.map(item => item.type))]
-  const months = [...new Set(trends.map(item => item.month))]
-  
-  return {
-    tooltip: {
-      trigger: 'axis'
-    },
-    legend: {
-      data: types,
-      top: 10
-    },
-    grid: {
-      top: 50,
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: months,
-      axisLabel: {
-        interval: 0,
-        rotate: 30
-      }
-    },
-    yAxis: {
-      type: 'value',
-      name: '次数'
-    },
-    series: types.map(type => ({
-      name: type,
-      type: 'line',
-      smooth: true,
-      data: months.map(month => {
-        const record = trends.find(t => t.type === type && t.month === month)
-        return record ? record.count : 0
-      })
-    }))
-  }
-})
-
 // 学生违纪频次分布图表配置
 const studentViolationDistOption = computed(() => {
   if (!analysisData.value?.studentViolationDist) {
@@ -828,180 +648,7 @@ const studentViolationDistOption = computed(() => {
   }
 })
 
-// 违纪时段分布图表配置
-const timeDistributionOption = computed(() => {
-  if (!analysisData.value?.timeDistribution) {
-    return {}
-  }
 
-  const data = analysisData.value.timeDistribution || []
-  const total = data.morning + data.afternoon + data.evening
-  
-  // 自定义颜色方案
-  const customColors = {
-    '上午': {
-      main: '#FFB37B',
-      hover: '#FFC69E'
-    },
-    '下午': {
-      main: '#73D13D',
-      hover: '#95DE64'
-    },
-    '晚上': {
-      main: '#597EF7',
-      hover: '#85A5FF'
-    }
-  }
-
-  return {
-    tooltip: {
-      trigger: 'item',
-      formatter: (params) => {
-        const percent = ((params.value / total) * 100).toFixed(1)
-        return `${params.name}<br/>违纪次数：${params.value}次<br/>占比：${percent}%`
-      },
-      backgroundColor: 'rgba(255, 255, 255, 0.9)',
-      borderColor: '#eee',
-      borderWidth: 1,
-      textStyle: {
-        color: '#666'
-      }
-    },
-    legend: {
-      top: '5%',
-      left: 'center',
-      icon: 'roundRect',
-      itemWidth: 12,
-      itemHeight: 12,
-      textStyle: {
-        fontSize: 14,
-        color: '#666'
-      }
-    },
-    title: {
-      text: `总违纪次数：${total}次`,
-      left: 'center',
-      top: '85%',
-      textStyle: {
-        fontSize: 14,
-        color: '#666',
-        fontWeight: 'normal'
-      }
-    },
-      series: [
-        {
-        type: 'pie',
-        radius: ['45%', '65%'], // 调小外圈半径
-        center: ['50%', '50%'],
-        avoidLabelOverlap: true,
-        itemStyle: {
-          borderRadius: 10,
-          borderColor: '#fff',
-          borderWidth: 2,
-          shadowBlur: 10,
-          shadowColor: 'rgba(0, 0, 0, 0.1)'
-        },
-        label: {
-          show: true,
-          position: 'outside',
-          alignTo: 'edge', // 标签对齐到边缘
-          margin: 20, // 增加标签与图形的距离
-          formatter: (params) => {
-            const percent = ((params.value / total) * 100).toFixed(1)
-            return [
-              `{name|${params.name}}`,
-              `{value|${params.value}次}`,
-              `{percent|(${percent}%)}`
-            ].join('\n')
-          },
-          distanceToLabelLine: 5, // 文字与引导线的距离
-          rich: {
-            name: {
-              fontSize: 14,
-              color: '#666',
-              padding: [0, 0, 5, 0]
-            },
-            value: {
-              fontSize: 16,
-              fontWeight: 'bold',
-              color: '#666',
-              padding: [5, 0]
-            },
-            percent: {
-              fontSize: 12,
-              color: '#999',
-              padding: [5, 0, 0, 0]
-            }
-          }
-        },
-        labelLine: {
-          length: 20, // 第一段引导线长度
-          length2: 30, // 第二段引导线长度
-          maxSurfaceAngle: 80, // 引导线与图形的最大夹角
-          smooth: 0.2, // 平滑程度
-          minTurnAngle: 90, // 最小转角角度
-          lineStyle: {
-            width: 1,
-            type: 'solid'
-          }
-        },
-        labelLayout: {
-          hideOverlap: true, // 隐藏重叠的标签
-          moveOverlap: 'shiftY' // Y轴方向移动重叠的标签
-        },
-        emphasis: {
-          itemStyle: {
-            shadowBlur: 20,
-            shadowColor: 'rgba(0, 0, 0, 0.2)'
-          },
-          label: {
-            show: true,
-            fontSize: 14,
-            fontWeight: 'bold'
-          }
-        },
-        data: [
-          { 
-            name: '上午',
-            value: data.morning || 0,
-            itemStyle: {
-              color: customColors['上午'].main
-            },
-            emphasis: {
-              itemStyle: {
-                color: customColors['上午'].hover
-              }
-            }
-          },
-          { 
-            name: '下午',
-            value: data.afternoon || 0,
-            itemStyle: {
-              color: customColors['下午'].main
-            },
-            emphasis: {
-              itemStyle: {
-                color: customColors['下午'].hover
-              }
-            }
-          },
-          { 
-            name: '晚上',
-            value: data.evening || 0,
-            itemStyle: {
-              color: customColors['晚上'].main
-            },
-            emphasis: {
-              itemStyle: {
-                color: customColors['晚上'].hover
-              }
-            }
-          }
-        ].sort((a, b) => b.value - a.value) // 按数值大小排序
-      }
-    ]
-  }
-})
 
 // 违纪原因分析图表配置
 const reasonAnalysisOption = computed(() => {
@@ -1327,24 +974,27 @@ const getProgressPercentage = (row) => {
 
 <style scoped>
 .analysis-container {
-  padding: 20px;
+  padding: 24px;
+  background-color: #f5f7fa;
+  min-height: calc(100vh - 84px);
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   background-color: #fff;
-  padding: 16px;
+  padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
 }
 
 .header h2 {
   margin: 0;
-  font-size: 20px;
-  color: #333;
+  font-size: 22px;
+  color: #1f2f3d;
+  font-weight: 600;
 }
 
 .filters {
@@ -1373,272 +1023,164 @@ const getProgressPercentage = (row) => {
 }
 
 .analysis-card {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  transition: all 0.3s ease;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.analysis-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 .stat-item {
   text-align: center;
-  padding: 20px;
+  padding: 24px;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+  background-color: #e9ecef;
+  transform: translateY(-2px);
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: bold;
   color: #409EFF;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  line-height: 1.2;
 }
 
 .stat-label {
   color: #606266;
+  font-size: 14px;
 }
 
 .chart-row {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .chart-card {
-  height: 400px;
+  height: 450px;
+  transition: all 0.3s ease;
 }
 
 .chart-container {
-  height: 320px;
+  height: 370px;
+  padding: 16px;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #EBEEF5;
+  background-color: #fafafa;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2f3d;
+  position: relative;
+  padding-left: 12px;
+}
+
+.card-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 16px;
+  background-color: #409EFF;
+  border-radius: 2px;
 }
 
 :deep(.el-card__header) {
-  padding: 12px 20px;
-  border-bottom: 1px solid #EBEEF5;
+  padding: 0;
+  border-bottom: none;
 }
 
-.risk-warning-card {
-  height: auto !important;
-  transition: all 0.3s ease;
+/* 响应式设计 */
+@media screen and (max-width: 1400px) {
+  .chart-card {
+    height: 400px;
+  }
+  
+  .chart-container {
+    height: 320px;
+  }
 }
 
-.risk-warning-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 20px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.warning-icon {
-  font-size: 20px;
-  color: #FF4D4F;
-}
-
-.title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2f3d;
-}
-
-.warning-count {
-  margin-left: 8px;
-}
-
-.time-selector {
-  background: #f5f7fa;
-  padding: 2px;
-  border-radius: 4px;
-}
-
-.risk-warning-container {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  margin-top: 20px;
-}
-
-.risk-chart-section {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-}
-
-.chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.section-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2f3d;
-}
-
-.chart-legend {
-  display: flex;
-  gap: 16px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: #606266;
-}
-
-.legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.legend-dot.high {
-  background-color: #FF4D4F;
-}
-
-.legend-dot.medium {
-  background-color: #FAAD14;
-}
-
-.legend-dot.low {
-  background-color: #52C41A;
-}
-
-.risk-chart {
-  height: 300px;
-}
-
-.risk-list-section {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-}
-
-.list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.risk-table {
-  margin-top: 16px;
-}
-
-.student-name {
-  font-weight: 500;
-  color: #1f2f3d;
-}
-
-.rate-box {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.rate-value {
-  font-size: 13px;
-  color: #606266;
-}
-
-.rate-progress {
-  margin-top: 4px;
-}
-
-.date-text {
-  color: #606266;
-}
-
-.risk-level-box {
-  display: flex;
-  align-items: center;
-}
-
-.risk-tag {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-}
-
-.risk-icon {
-  font-size: 14px;
-}
-
-.violation-types {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.type-tag {
-  margin: 2px;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-:deep(.el-table) {
-  --el-table-border-color: var(--el-border-color-lighter);
-  --el-table-header-bg-color: var(--el-fill-color-light);
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-}
-
-:deep(.el-table__header) {
-  font-weight: 600;
-}
-
-:deep(.el-table__row) {
-  transition: all 0.3s ease;
-}
-
-:deep(.el-table__row:hover) {
-  background-color: #f5f7fa !important;
-}
-
-:deep(.el-progress-bar__inner) {
-  transition: all 0.3s ease;
-}
-
-:deep(.el-tag) {
-  border: none;
-}
-
-:deep(.el-radio-button__inner) {
-  padding: 8px 15px;
-}
-
-/* 响应式调整 */
 @media screen and (max-width: 1200px) {
-  .risk-chart {
-    height: 250px;
+  .chart-card {
+    height: 350px;
+  }
+  
+  .chart-container {
+    height: 270px;
+  }
+  
+  .stat-value {
+    font-size: 24px;
   }
 }
 
 @media screen and (max-width: 768px) {
-  .risk-chart {
-    height: 200px;
-  }
-  
-  .chart-header {
+  .header {
     flex-direction: column;
+    gap: 16px;
     align-items: flex-start;
-    gap: 8px;
   }
   
-  .chart-legend {
-    margin-top: 8px;
+  .filters {
+    flex-wrap: wrap;
+    width: 100%;
   }
+  
+  :deep(.el-select),
+  :deep(.el-date-editor) {
+    width: 100% !important;
+  }
+  
+  .el-col {
+    width: 100% !important;
+  }
+  
+  .chart-card {
+    height: 300px;
+    margin-bottom: 16px;
+  }
+  
+  .chart-container {
+    height: 220px;
+  }
+}
+
+/* 美化滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c0c4cc;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #909399;
 }
 </style> 

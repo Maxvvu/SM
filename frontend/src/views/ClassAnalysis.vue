@@ -99,18 +99,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="12">
-        <el-card class="chart-card">
-          <template #header>
-            <div class="card-header">
-              <span>违纪类型分布</span>
-            </div>
-          </template>
-          <div class="chart-container">
-            <VChart :option="typeDistributionOption" autoresize />
-          </div>
-        </el-card>
-      </el-col>
+
     </el-row>
   </div>
 </template>
@@ -326,55 +315,7 @@ const trendOption = computed(() => {
   }
 })
 
-// 违纪类型分布图表配置
-const typeDistributionOption = computed(() => {
-  if (!analysisData.value?.classAnalysis?.rankings?.top_violation_count) {
-    return {}
-  }
 
-  const data = analysisData.value.classAnalysis.rankings.top_violation_count
-  return {
-    tooltip: {
-      trigger: 'item',
-      formatter: '{b}: {c} ({d}%)'
-    },
-    legend: {
-      orient: 'vertical',
-      right: 10,
-      top: 'center'
-    },
-    series: [
-      {
-        type: 'pie',
-        radius: ['40%', '70%'],
-        avoidLabelOverlap: false,
-        itemStyle: {
-          borderRadius: 10,
-          borderColor: '#fff',
-          borderWidth: 2
-        },
-        label: {
-          show: false,
-          position: 'center'
-        },
-        emphasis: {
-          label: {
-            show: true,
-            fontSize: 20,
-            fontWeight: 'bold'
-          }
-        },
-        labelLine: {
-          show: false
-        },
-        data: data.map(item => ({
-          name: `${item.grade}${item.class}班`,
-          value: item.violation_count
-        }))
-      }
-    ]
-  }
-})
 
 // 获取分析数据
 const fetchAnalysisData = async () => {

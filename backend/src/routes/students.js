@@ -367,6 +367,32 @@ router.delete('/:id', authenticateToken, async (req, res, next) => {
       // 先删除该学生的所有行为记录
       await run('DELETE FROM behaviors WHERE student_id = ?', [req.params.id]);
       
+      // 删除与该学生相关的教师行为记录（根据班级信息）并获取被删除的记录
+      const teacherClass = `${student.grade}${student.class}班`;
+      const [teacherBehaviors] = await get(
+        'SELECT * FROM teacher_behaviors WHERE teacher_name = ?',
+        [teacherClass]
+      );
+
+      if (teacherBehaviors) {
+        // 删除教师行为记录
+        await run('DELETE FROM teacher_behaviors WHERE teacher_name = ?', [teacherClass]);
+
+        // 更新班级分数
+        const match = teacherClass.match(/(高[一二三])(\d+)班/);
+        if (match) {
+          const [, grade, classNum] = match;
+          // 重置班级分数为1000（基础分）
+          await run(
+            `UPDATE class_scores 
+             SET total_score = 1000,
+                 updated_at = datetime(CURRENT_TIMESTAMP,'localtime')
+             WHERE grade = ? AND class = ?`,
+            [grade, classNum]
+          );
+        }
+      }
+      
       // 再删除学生记录
       const result = await run('DELETE FROM students WHERE id = ?', [req.params.id]);
 
@@ -389,7 +415,8 @@ router.delete('/:id', authenticateToken, async (req, res, next) => {
           details: {
             id: req.params.id,
             student_name: student.name,
-            student_id: student.student_id
+            student_id: student.student_id,
+            teacher_class: teacherClass
           }
         });
       } catch (logError) {
@@ -542,7 +569,7 @@ router.post('/batch-delete', authenticateToken, async (req, res, next) => {
     try {
       // 获取要删除的学生信息（用于日志记录）
       const students = await get(
-        'SELECT id, name, student_id FROM students WHERE id IN (' + ids.map(() => '?').join(',') + ')',
+        'SELECT id, name, student_id, grade, class FROM students WHERE id IN (' + ids.map(() => '?').join(',') + ')',
         ids
       );
 
@@ -557,6 +584,36 @@ router.post('/batch-delete', authenticateToken, async (req, res, next) => {
         ids
       );
 
+      // 删除相关的教师行为记录并更新班级分数
+      for (const student of students) {
+        const teacherClass = `${student.grade}${student.class}班`;
+        
+        // 获取教师行为记录
+        const [teacherBehaviors] = await get(
+          'SELECT * FROM teacher_behaviors WHERE teacher_name = ?',
+          [teacherClass]
+        );
+
+        if (teacherBehaviors) {
+          // 删除教师行为记录
+          await run('DELETE FROM teacher_behaviors WHERE teacher_name = ?', [teacherClass]);
+
+          // 更新班级分数
+          const match = teacherClass.match(/(高[一二三])(\d+)班/);
+          if (match) {
+            const [, grade, classNum] = match;
+            // 重置班级分数为1000（基础分）
+            await run(
+              `UPDATE class_scores 
+               SET total_score = 1000,
+                   updated_at = datetime(CURRENT_TIMESTAMP,'localtime')
+               WHERE grade = ? AND class = ?`,
+              [grade, classNum]
+            );
+          }
+        }
+      }
+
       // 再删除学生记录
       const result = await run(
         'DELETE FROM students WHERE id IN (' + ids.map(() => '?').join(',') + ')',
@@ -569,6 +626,7 @@ router.post('/batch-delete', authenticateToken, async (req, res, next) => {
       // 记录操作日志
       try {
         for (const student of students) {
+          const teacherClass = `${student.grade}${student.class}班`;
           await logger.logOperation({
             type: 'delete',
             module: 'students',
@@ -578,7 +636,8 @@ router.post('/batch-delete', authenticateToken, async (req, res, next) => {
             details: {
               id: student.id,
               student_name: student.name,
-              student_id: student.student_id
+              student_id: student.student_id,
+              teacher_class: teacherClass
             }
           });
         }
