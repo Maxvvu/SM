@@ -10,7 +10,7 @@ import { ElMessage } from 'element-plus'
 
 // 配置axios默认值
 axios.defaults.withCredentials = true
-axios.defaults.baseURL = '/api'
+axios.defaults.baseURL = ''
 
 // axios请求拦截器
 axios.interceptors.request.use(
