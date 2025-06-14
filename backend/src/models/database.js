@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const { logger } = require('../utils/logger');
 
 // 修改数据库路径
-const dbPath = path.join(__dirname, '../database.sqlite');
+const dbPath = path.join(__dirname, '../../database.sqlite');
 
 let db;
 
