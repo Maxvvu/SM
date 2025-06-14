@@ -27,7 +27,7 @@ ensureUploadDirectories();
 
 // 中间件配置
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', , 'http://wuxiaoyue.top:3000'],
+  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://wuxiaoyue.top:3000', 'http://wuxiaoyue.top:3001'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
   credentials: true,
@@ -39,6 +39,20 @@ app.use(morgan('dev'));
 
 // 静态文件服务 - 需要在API路由之前配置
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// 前端静态文件服务
+const frontendPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendPath, {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (path.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    } else if (path.endsWith('.html')) {
+      res.setHeader('Content-Type', 'text/html');
+    }
+  }
+}));
 
 // API路由配置
 app.use('/api/auth', authRoutes);
@@ -63,6 +77,36 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ message: '文件上传错误' });
   }
   res.status(500).json({ message: '服务器内部错误' });
+});
+
+// 处理前端路由
+app.get('*', (req, res) => {
+  // 检查文件是否存在
+  const indexPath = path.join(__dirname, '../../frontend/dist/index.html');
+  console.log('尝试访问文件:', indexPath);
+  
+  // 如果文件不存在，返回一个简单的错误页面
+  if (!require('fs').existsSync(indexPath)) {
+    console.error('前端文件不存在:', indexPath);
+    return res.status(404).send(`
+      <html>
+        <head>
+          <title>404 - 前端文件未找到</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            h1 { color: #333; }
+            p { color: #666; }
+          </style>
+        </head>
+        <body>
+          <h1>404 - 前端文件未找到</h1>
+          <p>请确保前端文件已正确部署到: ${indexPath}</p>
+        </body>
+      </html>
+    `);
+  }
+  
+  res.sendFile(indexPath);
 });
 
 // 初始化数据库并启动服务器

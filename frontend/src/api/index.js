@@ -6,7 +6,6 @@ import router from '../router'
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://wuxiaoyue.top:3001',
   timeout: 10000,
-  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
