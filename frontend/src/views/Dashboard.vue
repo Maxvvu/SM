@@ -54,7 +54,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import axios from 'axios'
+import api from '../api'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 
@@ -122,14 +122,14 @@ const fetchBehaviorStats = async () => {
     startDate.setMonth(now.getMonth() - selectedPeriod.value)
 
     const [violationResponse, excellentResponse] = await Promise.all([
-      axios.get('/api/behaviors/stats', {
+      api.get('/behaviors/stats', {
         params: {
           start_date: startDate.toISOString(),
           end_date: now.toISOString(),
           type: 'violation'
         }
       }),
-      axios.get('/api/behaviors/stats', {
+      api.get('/behaviors/stats', {
         params: {
           start_date: startDate.toISOString(),
           end_date: now.toISOString(),
@@ -152,7 +152,7 @@ const fetchBehaviorStats = async () => {
 
 const fetchStudentStats = async () => {
   try {
-    const response = await axios.get('/api/statistics')
+    const response = await api.get('/statistics')
     const data = response.data
     
     totalStudents.value = data.overview.total_students

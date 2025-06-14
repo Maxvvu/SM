@@ -461,7 +461,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
-import axios from 'axios'
+import api from '../api'
 import moment from 'moment'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
@@ -683,7 +683,7 @@ const fetchBehaviors = async () => {
     loading.value = true
     console.log('正在获取行为记录列表...')
     
-    const response = await axios.get('/api/behaviors')
+    const response = await api.get('/behaviors')
     console.log('获取列表响应:', response)
     
     if (!response || !response.data) {
@@ -712,7 +712,7 @@ const fetchBehaviors = async () => {
 // 获取学生列表
 const fetchStudents = async () => {
   try {
-    const response = await axios.get('/api/students')
+    const response = await api.get('/students')
     students.value = response.data
   } catch (error) {
     console.error('获取学生列表失败:', error)
@@ -723,7 +723,7 @@ const fetchStudents = async () => {
 // 获取行为类型列表
 const fetchBehaviorTypes = async () => {
   try {
-    const response = await axios.get('/api/behaviorTypes')
+    const response = await api.get('/behaviorTypes')
     behaviorTypes.value = response.data
   } catch (error) {
     console.error('获取行为类型失败:', error)
@@ -854,7 +854,7 @@ const handleSubmit = async () => {
     try {
       if (form.value.id) {
         console.log('执行更新操作，ID:', form.value.id)
-        response = await axios.put(`/api/behaviors/${form.value.id}`, requestData)
+        response = await api.put(`/behaviors/${form.value.id}`, requestData)
         console.log('更新响应:', response.data)
         
         ElMessage.success({
@@ -864,7 +864,7 @@ const handleSubmit = async () => {
         })
       } else {
         console.log('执行添加操作')
-        response = await axios.post('/api/behaviors', requestData)
+        response = await api.post('/behaviors', requestData)
         console.log('添加响应:', response.data)
         
         ElMessage.success({
@@ -937,7 +937,7 @@ const handleDelete = (row) => {
       try {
         console.log('正在删除记录:', row.id)
         
-        const response = await axios.delete(`/api/behaviors/${row.id}`)
+        const response = await api.delete(`/behaviors/${row.id}`)
         
         console.log('删除响应:', response)
         
@@ -1156,7 +1156,7 @@ const handleStartEdit = () => {
 const handleSaveEdit = async () => {
   try {
     submitting.value = true
-    const response = await axios.put(`/api/behaviors/${selectedBehavior.value.id}`, {
+    const response = await api.put(`/behaviors/${selectedBehavior.value.id}`, {
       ...selectedBehavior.value,
       process_result: editForm.value.process_result?.trim() || null
     })

@@ -332,7 +332,7 @@ import {
   GridComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
-import axios from 'axios'
+import api from '../api'
 import { ElMessage } from 'element-plus'
 import { Warning, WarningFilled, Download } from '@element-plus/icons-vue'
 
@@ -777,7 +777,7 @@ const getViolationColor = (times) => {
 // 获取年级和班级信息
 const fetchClassInfo = async () => {
   try {
-    const response = await axios.get('/api/statistics/class-info')
+    const response = await api.get('/statistics/class-info')
     classInfo.value = response.data
     
     // 更新年级选项
@@ -850,7 +850,7 @@ const fetchAnalysisData = async () => {
     }
 
     console.log('发送请求参数:', params)
-    const response = await axios.get('/api/statistics/analysis', { params })
+    const response = await api.get('/statistics/analysis', { params })
     console.log('获取分析数据响应:', response.data)
     
     if (!response || !response.data) {
@@ -896,7 +896,7 @@ const formatDate = (dateStr) => {
 const fetchRiskWarningData = async () => {
   riskLoading.value = true
   try {
-    const response = await axios.get('/api/statistics/risk-warning', {
+    const response = await api.get('/statistics/risk-warning', {
       params: { 
         days: riskDays.value,
         grade: selectedGrade.value,

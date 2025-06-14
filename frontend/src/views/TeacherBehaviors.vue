@@ -245,7 +245,7 @@
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
-import axios from 'axios'
+import api from '../api'
 import moment from 'moment'
 
 // 定义组件事件
@@ -271,7 +271,7 @@ const refreshTimer = ref(null)
 // 获取行为类型列表
 const fetchBehaviorTypes = async () => {
   try {
-    const response = await axios.get('/api/score-items')
+    const response = await api.get('/score-items')
     // 获取所有加减分项
     const items = response.data
     behaviorTypes.value = items.map(item => item.name)
@@ -426,7 +426,7 @@ const paginatedBehaviors = computed(() => {
 const fetchBehaviors = async () => {
   try {
     loading.value = true
-    const response = await axios.get('/api/teacher-behaviors')
+    const response = await api.get('/teacher-behaviors')
     behaviors.value = response.data.map(behavior => ({
       ...behavior,
       date: moment(behavior.date).format('YYYY-MM-DD HH:mm:ss')
@@ -443,7 +443,7 @@ const fetchBehaviors = async () => {
 const fetchTeachers = async () => {
   try {
     // 从学生信息中获取班主任数据
-    const response = await axios.get('/api/students')
+    const response = await api.get('/students')
     const students = response.data
     
     // 提取所有不重复的教师信息
@@ -558,7 +558,7 @@ const handleDelete = (row) => {
   )
     .then(async () => {
       try {
-        await axios.delete(`/api/teacher-behaviors/${row.id}`)
+        await api.delete(`/teacher-behaviors/${row.id}`)
         ElMessage.success('删除成功')
             await fetchBehaviors()
       } catch (error) {
@@ -597,7 +597,7 @@ const handleSubmit = async () => {
     let response;
     if (form.value.id) {
       // 编辑
-      response = await axios.put(`/api/teacher-behaviors/${form.value.id}`, submitData)
+      response = await api.put(`/teacher-behaviors/${form.value.id}`, submitData)
       ElMessage({
         type: 'success',
         message: '更新成功',
@@ -605,7 +605,7 @@ const handleSubmit = async () => {
       })
     } else {
       // 新增
-      response = await axios.post('/api/teacher-behaviors', submitData)
+      response = await api.post('/teacher-behaviors', submitData)
       ElMessage({
         type: 'success',
         message: '添加成功',

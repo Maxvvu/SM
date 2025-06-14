@@ -116,7 +116,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import axios from 'axios'
+import api from '../api'
 
 // 状态变量
 const loading = ref(false)
@@ -187,7 +187,7 @@ const negativeItems = computed(() => {
 const fetchItems = async () => {
   try {
     loading.value = true
-    const response = await axios.get('/api/score-items')
+    const response = await api.get('/score-items')
     items.value = response.data
   } catch (error) {
     console.error('获取分项列表失败:', error)
@@ -231,11 +231,11 @@ const handleSubmit = async () => {
     submitting.value = true
     if (form.value.id) {
       // 编辑
-      await axios.put(`/api/score-items/${form.value.id}`, form.value)
+      await api.put(`/score-items/${form.value.id}`, form.value)
       ElMessage.success('更新成功')
     } else {
       // 新增
-      await axios.post('/api/score-items', form.value)
+      await api.post('/score-items', form.value)
       ElMessage.success('添加成功')
     }
     dialogVisible.value = false
@@ -265,7 +265,7 @@ const handleDelete = (row) => {
   )
     .then(async () => {
       try {
-        await axios.delete(`/api/score-items/${row.id}`)
+        await api.delete(`/score-items/${row.id}`)
         ElMessage.success('删除成功')
         fetchItems()
       } catch (error) {

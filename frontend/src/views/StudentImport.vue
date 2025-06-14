@@ -85,7 +85,7 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Upload, Download } from '@element-plus/icons-vue'
-import axios from 'axios'
+import api from '../api'
 
 const importing = ref(false)
 const downloading = ref(false)
@@ -199,13 +199,11 @@ const downloadTemplate = async () => {
   
   try {
     downloading.value = true
-    const response = await axios({
-      url: '/api/students/template',
-      method: 'GET',
-      responseType: 'blob',
+    const response = await api.get('/students/template', {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
+      },
+      responseType: 'blob'
     })
 
     // 创建下载链接

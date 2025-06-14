@@ -116,7 +116,7 @@ import {
   GridComponent
 } from 'echarts/components'
 import VChart from 'vue-echarts'
-import axios from 'axios'
+import api from '../api'
 import { ElMessage } from 'element-plus'
 
 use([
@@ -329,7 +329,7 @@ const fetchAnalysisData = async () => {
       params.grade = selectedGrade.value
     }
 
-    const response = await axios.get('/api/statistics/analysis', { params })
+    const response = await api.get('/statistics/analysis', { params })
     analysisData.value = response.data
   } catch (error) {
     console.error('获取分析数据失败:', error)

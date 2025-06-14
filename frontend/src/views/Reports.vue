@@ -84,7 +84,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
-import axios from 'axios'
+import api from '../api'
 import * as XLSX from 'xlsx'
 import moment from 'moment'
 
@@ -115,14 +115,14 @@ const fetchData = async () => {
     
     // 获取行为记录和学生数据
     const [behaviorsResponse, studentsResponse] = await Promise.all([
-      axios.get('/api/behaviors', {
+      api.get('/behaviors', {
         params: {
           grade: selectedGrade.value,
           start_date: dateRange.value?.[0]?.toISOString().split('T')[0],
           end_date: dateRange.value?.[1]?.toISOString().split('T')[0]
         }
       }),
-      axios.get('/api/students')
+      api.get('/students')
     ])
 
     const students = studentsResponse.data

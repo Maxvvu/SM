@@ -114,7 +114,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import axios from 'axios'
+import api from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const loading = ref(false)
@@ -183,7 +183,7 @@ const excellentTypes = computed(() => {
 const fetchBehaviorTypes = async () => {
   try {
     loading.value = true
-    const response = await axios.get('/api/behaviorTypes')
+    const response = await api.get('/behaviorTypes')
     behaviorTypes.value = response.data
   } catch (error) {
     console.error('获取行为类型失败:', error)
@@ -227,11 +227,11 @@ const handleSubmit = async () => {
     submitting.value = true
     if (form.value.id) {
       // 编辑
-      await axios.put(`/api/behaviorTypes/${form.value.id}`, form.value)
+      await api.put(`/behaviorTypes/${form.value.id}`, form.value)
       ElMessage.success('更新成功')
     } else {
       // 新增
-      await axios.post('/api/behaviorTypes', form.value)
+      await api.post('/behaviorTypes', form.value)
       ElMessage.success('添加成功')
     }
     dialogVisible.value = false
@@ -261,7 +261,7 @@ const handleDelete = (row) => {
   )
     .then(async () => {
       try {
-        await axios.delete(`/api/behaviorTypes/${row.id}`)
+        await api.delete(`/behaviorTypes/${row.id}`)
         ElMessage.success('删除成功')
         fetchBehaviorTypes()
       } catch (error) {

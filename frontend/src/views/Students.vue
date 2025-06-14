@@ -443,7 +443,7 @@
 
 <script setup>
 import { ref, onMounted, computed, nextTick } from 'vue'
-import axios from 'axios'
+import api from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, Plus, Picture, Search } from '@element-plus/icons-vue'
 
@@ -757,7 +757,7 @@ const handleAdd = () => {
 const fetchStudents = async () => {
   loading.value = true
   try {
-    const response = await axios.get('/api/students')
+    const response = await api.get('/students')
     if (response && response.data) {
       console.log('获取到的学生列表:', response.data)
       students.value = response.data
@@ -795,7 +795,7 @@ const handleDelete = (row) => {
     .then(async () => {
       try {
         loading.value = true
-        await axios.delete(`/api/students/${row.id}`)
+        await api.delete(`/students/${row.id}`)
         ElMessage.success('删除成功')
         await fetchStudents()
       } catch (error) {
@@ -915,11 +915,11 @@ const handleSubmit = async () => {
     let response
     if (form.value.id) {
       console.log('执行更新操作，ID:', form.value.id)
-      response = await axios.put(`/api/students/${form.value.id}`, submitData)
+      response = await api.put(`/students/${form.value.id}`, submitData)
       console.log('更新响应数据:', response.data)
     } else {
       console.log('执行添加操作')
-      response = await axios.post('/api/students', submitData)
+      response = await api.post('/students', submitData)
       console.log('添加响应数据:', response.data)
     }
     
@@ -1024,7 +1024,7 @@ const handleBatchDelete = () => {
       try {
         loading.value = true
         // 使用新的批量删除接口
-        const response = await axios.post('/api/students/batch-delete', {
+        const response = await api.post('/students/batch-delete', {
           ids: selectedStudents.value.map(student => student.id)
         })
         
@@ -1164,7 +1164,7 @@ const handleBatchEditSubmit = async () => {
     // 创建批量更新请求的Promise数组
     const updatePromises = selectedStudents.value.map(async student => {
       try {
-        const response = await axios.put(`/api/students/${student.id}`, updateData)
+        const response = await api.put(`/students/${student.id}`, updateData)
         return response.data
       } catch (error) {
         console.error(`更新学生 ${student.name}(ID: ${student.id}) 失败:`, error)

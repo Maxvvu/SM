@@ -189,7 +189,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, List, Download } from '@element-plus/icons-vue'
-import axios from 'axios'
+import api from '../api'
 import moment from 'moment'
 
 // 状态变量
@@ -261,9 +261,9 @@ const fetchTeachers = async () => {
   loading.value = true
   try {
     const [studentsResponse, behaviorsResponse, teacherBehaviorsResponse] = await Promise.all([
-      axios.get('/api/students'),
-      axios.get('/api/behaviors'),
-      axios.get('/api/teacher-behaviors')
+      api.get('/students'),
+      api.get('/behaviors'),
+      api.get('/teacher-behaviors')
     ])
     
     const students = studentsResponse.data
@@ -394,7 +394,7 @@ const getTeacherNameFromClass = (className) => {
 // 获取行为类型列表
 const fetchBehaviorTypes = async () => {
   try {
-    const response = await axios.get('/api/behaviorTypes')
+    const response = await api.get('/behaviorTypes')
     behaviorTypes.value = response.data
   } catch (error) {
     console.error('获取行为类型失败:', error)
@@ -572,7 +572,7 @@ const showScoreDetails = async (teacher) => {
       month: selectedMonth.value
     }
     
-    const response = await axios.get('/api/teachers/score-details', { params })
+    const response = await api.get('/teachers/score-details', { params })
     scoreDetails.value = response.data.map(item => ({
       ...item,
       date: moment(item.date).format('YYYY-MM-DD HH:mm:ss')
