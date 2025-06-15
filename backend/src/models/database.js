@@ -69,6 +69,7 @@ async function initDatabase() {
         student_id TEXT UNIQUE NOT NULL,
         grade TEXT NOT NULL,
         class TEXT,
+        teacher TEXT,
         photo_url TEXT,
         address TEXT,
         emergency_contact TEXT,

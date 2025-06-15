@@ -757,12 +757,10 @@ const handleAdd = () => {
 const fetchStudents = async () => {
   loading.value = true
   try {
-    const response = await api.get('/students')
-    if (response && response.data) {
-      console.log('获取到的学生列表:', response.data)
-      students.value = response.data
-    } else {
-      console.warn('获取学生列表响应异常:', response)
+    const response = await api.get('/api/students')
+    if (response && response) {
+      console.log('获取到的学生列表:', response)
+      students.value = response
     }
   } catch (error) {
     console.error('获取学生列表失败:', error)
@@ -795,7 +793,7 @@ const handleDelete = (row) => {
     .then(async () => {
       try {
         loading.value = true
-        await api.delete(`/students/${row.id}`)
+        await api.delete(`/api/students/${row.id}`)
         ElMessage.success('删除成功')
         await fetchStudents()
       } catch (error) {
@@ -915,21 +913,21 @@ const handleSubmit = async () => {
     let response
     if (form.value.id) {
       console.log('执行更新操作，ID:', form.value.id)
-      response = await api.put(`/students/${form.value.id}`, submitData)
-      console.log('更新响应数据:', response.data)
+      response = await api.put(`/api/students/${form.value.id}`, submitData)
+      console.log('更新响应数据:', response)
     } else {
       console.log('执行添加操作')
-      response = await api.post('/students', submitData)
-      console.log('添加响应数据:', response.data)
+      response = await api.post('/api/students', submitData)
+      console.log('添加响应数据:', response)
     }
     
-    if (response && response.data) {
+    if (response && response) {
       if (!form.value.id) {
-        students.value.unshift(response.data)
+        students.value.unshift(response)
       } else {
         const index = students.value.findIndex(item => item.id === form.value.id)
         if (index !== -1) {
-          students.value[index] = response.data
+          students.value[index] = response
         }
       }
       
@@ -1024,12 +1022,12 @@ const handleBatchDelete = () => {
       try {
         loading.value = true
         // 使用新的批量删除接口
-        const response = await api.post('/students/batch-delete', {
+        const response = await api.post('/api/students/batch-delete', {
           ids: selectedStudents.value.map(student => student.id)
         })
         
-        if (response.data.deletedCount > 0) {
-          ElMessage.success(`成功删除 ${response.data.deletedCount} 名学生`)
+        if (response.deletedCount > 0) {
+          ElMessage.success(`成功删除 ${response.deletedCount} 名学生`)
           // 重新获取学生列表
           await fetchStudents()
         } else {
@@ -1164,8 +1162,8 @@ const handleBatchEditSubmit = async () => {
     // 创建批量更新请求的Promise数组
     const updatePromises = selectedStudents.value.map(async student => {
       try {
-        const response = await api.put(`/students/${student.id}`, updateData)
-        return response.data
+        const response = await api.put(`/api/students/${student.id}`, updateData)
+        return response
       } catch (error) {
         console.error(`更新学生 ${student.name}(ID: ${student.id}) 失败:`, error)
         throw error

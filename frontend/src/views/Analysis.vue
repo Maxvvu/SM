@@ -354,6 +354,7 @@ const analysisData = ref({})
 const classOptions = ref([])
 const gradeOptions = ref([{ value: '', label: '全部年级' }])
 const classInfo = ref({})
+const analysisLoading = ref(false)
 
 // 日期快捷选项
 const dateShortcuts = [
@@ -777,29 +778,16 @@ const getViolationColor = (times) => {
 // 获取年级和班级信息
 const fetchClassInfo = async () => {
   try {
-    const response = await api.get('/statistics/class-info')
-    classInfo.value = response.data
+    const response = await api.get('/api/statistics/class-info')
+    classInfo.value = response
     
-    // 更新年级选项
-    const grades = Object.keys(classInfo.value).map(grade => ({
-      value: grade,
-      label: grade
-    }))
-    gradeOptions.value = [{ value: '', label: '全部年级' }, ...grades]
-    
-    // 如果当前选中的年级不在可选范围内，清空选择
-    if (selectedGrade.value && !classInfo.value[selectedGrade.value]) {
-      selectedGrade.value = ''
-      selectedClass.value = ''
+    // 初始化班级信息图表
+    if (classInfo.value && classInfo.value.length > 0) {
+      initClassInfoChart()
     }
-    
-    // 更新班级选项
-    updateClassOptions()
-    
-    console.log('班级信息:', classInfo.value)
   } catch (error) {
-    console.error('获取年级和班级信息失败:', error)
-    ElMessage.error('获取年级和班级信息失败')
+    console.error('获取班级信息失败:', error)
+    ElMessage.error('获取班级信息失败')
   }
 }
 
@@ -836,31 +824,31 @@ const handleClassChange = () => {
 // 获取分析数据
 const fetchAnalysisData = async () => {
   try {
-    const params = {}
-    if (dateRange.value?.length === 2) {
-      params.start_date = dateRange.value[0].toISOString().split('T')[0]
-      params.end_date = dateRange.value[1].toISOString().split('T')[0]
-    }
-    if (selectedGrade.value) {
-      params.grade = selectedGrade.value
-    }
-    if (selectedClass.value) {
-      // 处理班级参数，确保双优班正确传递
-      params.class = selectedClass.value === '双优班' ? '双优' : selectedClass.value.replace('班', '')
+    analysisLoading.value = true
+    
+    const params = {
+      start_date: dateRange.value?.[0]?.toISOString().split('T')[0],
+      end_date: dateRange.value?.[1]?.toISOString().split('T')[0],
+      grade: selectedGrade.value,
+      class: selectedClass.value
     }
 
     console.log('发送请求参数:', params)
-    const response = await api.get('/statistics/analysis', { params })
-    console.log('获取分析数据响应:', response.data)
+    const response = await api.get('/api/statistics/analysis', { params })
+    console.log('获取分析数据响应:', response)
     
-    if (!response || !response.data) {
-      throw new Error('获取数据失败：服务器响应异常')
+    if (!response || !response) {
+      console.error('响应数据为空')
+      ElMessage.error('获取分析数据失败')
+      return
     }
-
-    analysisData.value = response.data
+    
+    analysisData.value = response
   } catch (error) {
     console.error('获取分析数据失败:', error)
     ElMessage.error('获取分析数据失败')
+  } finally {
+    analysisLoading.value = false
   }
 }
 
@@ -896,15 +884,16 @@ const formatDate = (dateStr) => {
 const fetchRiskWarningData = async () => {
   riskLoading.value = true
   try {
-    const response = await api.get('/statistics/risk-warning', {
+    const response = await api.get('/api/statistics/risk-warning', {
       params: { 
         days: riskDays.value,
         grade: selectedGrade.value,
         class: selectedClass.value
       }
     })
-    riskWarningData.value = response.data
-    console.log('风险预警数据:', response.data)
+    
+    riskWarningData.value = response
+    console.log('风险预警数据:', response)
   } catch (error) {
     console.error('获取风险预警数据失败:', error)
     ElMessage.error('获取风险预警数据失败')

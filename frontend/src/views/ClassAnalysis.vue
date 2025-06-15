@@ -133,6 +133,7 @@ use([
 const dateRange = ref([])
 const selectedGrade = ref('')
 const analysisData = ref({})
+const loading = ref(false)
 
 // 日期快捷选项
 const dateShortcuts = [
@@ -315,25 +316,24 @@ const trendOption = computed(() => {
   }
 })
 
-
-
 // 获取分析数据
 const fetchAnalysisData = async () => {
   try {
-    const params = {}
-    if (dateRange.value?.length === 2) {
-      params.start_date = dateRange.value[0].toISOString().split('T')[0]
-      params.end_date = dateRange.value[1].toISOString().split('T')[0]
-    }
-    if (selectedGrade.value) {
-      params.grade = selectedGrade.value
+    loading.value = true
+    
+    const params = {
+      start_date: dateRange.value?.[0]?.toISOString().split('T')[0],
+      end_date: dateRange.value?.[1]?.toISOString().split('T')[0],
+      grade: selectedGrade.value
     }
 
     const response = await api.get('/statistics/analysis', { params })
-    analysisData.value = response.data
+    analysisData.value = response
   } catch (error) {
     console.error('获取分析数据失败:', error)
     ElMessage.error('获取分析数据失败')
+  } finally {
+    loading.value = false
   }
 }
 

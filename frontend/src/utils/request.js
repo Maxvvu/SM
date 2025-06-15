@@ -5,7 +5,7 @@ import { useUserStore } from '../stores/user'
 
 // 创建axios实例
 const request = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://wuxiaoyue.top:3001',
+  baseURL: (import.meta.env.VITE_API_URL || 'http://wuxiaoyue.top:3001'),
   timeout: 15000,
   withCredentials: true // 允许跨域请求携带凭证
 })
@@ -13,6 +13,13 @@ const request = axios.create({
 // 请求拦截器
 request.interceptors.request.use(
   config => {
+    console.log('[REQUEST] 发送请求:', {
+      url: config.url,
+      method: config.method,
+      data: config.data,
+      headers: config.headers,
+      baseURL: config.baseURL
+    })
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`

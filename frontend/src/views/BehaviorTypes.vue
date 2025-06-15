@@ -183,8 +183,8 @@ const excellentTypes = computed(() => {
 const fetchBehaviorTypes = async () => {
   try {
     loading.value = true
-    const response = await api.get('/behaviorTypes')
-    behaviorTypes.value = response.data
+    const response = await api.get('/api/behaviorTypes')
+    behaviorTypes.value = response
   } catch (error) {
     console.error('获取行为类型失败:', error)
     ElMessage.error('获取行为类型失败')
@@ -227,11 +227,11 @@ const handleSubmit = async () => {
     submitting.value = true
     if (form.value.id) {
       // 编辑
-      await api.put(`/behaviorTypes/${form.value.id}`, form.value)
+      await api.put(`/api/behaviorTypes/${form.value.id}`, form.value)
       ElMessage.success('更新成功')
     } else {
       // 新增
-      await api.post('/behaviorTypes', form.value)
+      await api.post('/api/behaviorTypes', form.value)
       ElMessage.success('添加成功')
     }
     dialogVisible.value = false
@@ -261,19 +261,28 @@ const handleDelete = (row) => {
   )
     .then(async () => {
       try {
-        await api.delete(`/behaviorTypes/${row.id}`)
+        const response = await api.delete(`/api/behaviorTypes/${row.id}`)
+        // 从本地数据中移除
+        const index = behaviorTypes.value.findIndex(type => type.id === row.id)
+        if (index !== -1) {
+          behaviorTypes.value.splice(index, 1)
+        }
         ElMessage.success('删除成功')
-        fetchBehaviorTypes()
       } catch (error) {
+        console.error('删除行为类型失败:', error)
+        // 如果删除失败，刷新列表以确保数据同步
+        await fetchBehaviorTypes()
         if (error.response?.data?.message) {
           ElMessage.error(error.response.data.message)
         } else {
-          console.error('删除行为类型失败:', error)
           ElMessage.error('删除失败')
         }
       }
     })
-    .catch(() => {})
+    .catch(() => {
+      // 用户取消删除操作
+      ElMessage.info('已取消删除')
+    })
 }
 
 onMounted(() => {

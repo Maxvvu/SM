@@ -122,14 +122,14 @@ const fetchBehaviorStats = async () => {
     startDate.setMonth(now.getMonth() - selectedPeriod.value)
 
     const [violationResponse, excellentResponse] = await Promise.all([
-      api.get('/behaviors/stats', {
+      api.get('/api/behaviors/stats', {
         params: {
           start_date: startDate.toISOString(),
           end_date: now.toISOString(),
           type: 'violation'
         }
       }),
-      api.get('/behaviors/stats', {
+      api.get('/api/behaviors/stats', {
         params: {
           start_date: startDate.toISOString(),
           end_date: now.toISOString(),
@@ -138,11 +138,11 @@ const fetchBehaviorStats = async () => {
       })
     ])
 
-    if (violationResponse.data && typeof violationResponse.data.count === 'number') {
-      violationCount.value = violationResponse.data.count
+    if (violationResponse && typeof violationResponse.count === 'number') {
+      violationCount.value = violationResponse.count
     }
-    if (excellentResponse.data && typeof excellentResponse.data.count === 'number') {
-      excellentCount.value = excellentResponse.data.count
+    if (excellentResponse && typeof excellentResponse.count === 'number') {
+      excellentCount.value = excellentResponse.count
     }
   } catch (error) {
     console.error('获取行为统计失败:', error)
@@ -152,8 +152,7 @@ const fetchBehaviorStats = async () => {
 
 const fetchStudentStats = async () => {
   try {
-    const response = await api.get('/statistics')
-    const data = response.data
+    const data = await api.get('/api/statistics')
     
     totalStudents.value = data.overview.total_students
     

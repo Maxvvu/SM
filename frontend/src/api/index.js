@@ -4,7 +4,7 @@ import router from '../router'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://wuxiaoyue.top:3001',
+  baseURL: (import.meta.env.VITE_API_URL || 'http://wuxiaoyue.top:3001'),
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -15,11 +15,12 @@ const api = axios.create({
 // 请求拦截器
 api.interceptors.request.use(
   config => {
-    console.log('发送请求:', {
+    console.log('[API] 发送请求:', {
       url: config.url,
       method: config.method,
       data: config.data,
-      headers: config.headers
+      headers: config.headers,
+      baseURL: config.baseURL
     })
     const token = localStorage.getItem('token')
     if (token) {
@@ -41,6 +42,13 @@ api.interceptors.response.use(
       data: response.data,
       headers: response.headers
     })
+    
+    // 检查响应数据是否有效
+    if (response.data === null || response.data === undefined) {
+      console.warn('响应数据为空:', response)
+      return null
+    }
+    
     return response.data
   },
   error => {
@@ -50,8 +58,12 @@ api.interceptors.response.use(
       request: error.request,
       config: error.config
     })
+    
+    // 处理不同类型的错误
     if (error.response) {
-      switch (error.response.status) {
+      const { status, data } = error.response
+      
+      switch (status) {
         case 401:
         case 403:
           localStorage.removeItem('token')
@@ -63,16 +75,20 @@ api.interceptors.response.use(
           ElMessage.error('请求的资源不存在')
           break
         case 500:
-          ElMessage.error(error.response.data?.message || '服务器错误，请稍后重试')
+          const errorMessage = data?.message || '服务器错误，请稍后重试'
+          ElMessage.error(errorMessage)
+          console.error('服务器错误详情:', data)
           break
         default:
-          ElMessage.error(error.response.data?.message || '请求失败')
+          const defaultMessage = data?.message || '请求失败'
+          ElMessage.error(defaultMessage)
       }
     } else if (error.request) {
       ElMessage.error('无法连接到服务器，请检查网络或确认服务器是否运行')
     } else {
       ElMessage.error('请求配置错误')
     }
+    
     return Promise.reject(error)
   }
 )

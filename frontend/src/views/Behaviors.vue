@@ -683,27 +683,34 @@ const fetchBehaviors = async () => {
     loading.value = true
     console.log('正在获取行为记录列表...')
     
-    const response = await api.get('/behaviors')
+    const response = await api.get('/api/behaviors')
     console.log('获取列表响应:', response)
     
-    if (!response || !response.data) {
-      throw new Error('获取数据失败：服务器响应异常')
+    if (!response || !response) {
+      console.error('响应数据为空')
+      ElMessage.error('获取数据失败')
+      return
     }
     
-    if (!Array.isArray(response.data)) {
-      throw new Error('获取数据失败：响应格式错误')
+    if (!Array.isArray(response)) {
+      console.error('响应数据不是数组:', response)
+      ElMessage.error('数据格式错误')
+      return
     }
     
-    // 处理每条记录的时间格式
-    behaviors.value = response.data.map(behavior => ({
+    behaviors.value = response.map(behavior => ({
       ...behavior,
       date: moment(behavior.date).format('YYYY-MM-DD HH:mm:ss')
-    })).sort((a, b) => new Date(b.date) - new Date(a.date))
+    }))
     
-    console.log('列表数据更新成功，总条数:', behaviors.value.length)
+    console.log('处理后的行为记录:', behaviors.value)
   } catch (error) {
     console.error('获取行为记录失败:', error)
-    ElMessage.error(error.message || '获取数据失败')
+    let errorMessage = '获取行为记录失败'
+    if (error.response) {
+      errorMessage += `: ${error.response?.message || error.response.statusText || '未知错误'}`
+    }
+    ElMessage.error(errorMessage)
   } finally {
     loading.value = false
   }
@@ -712,8 +719,8 @@ const fetchBehaviors = async () => {
 // 获取学生列表
 const fetchStudents = async () => {
   try {
-    const response = await api.get('/students')
-    students.value = response.data
+    const response = await api.get('/api/students')
+    students.value = response
   } catch (error) {
     console.error('获取学生列表失败:', error)
     ElMessage.error('获取学生列表失败')
@@ -723,8 +730,8 @@ const fetchStudents = async () => {
 // 获取行为类型列表
 const fetchBehaviorTypes = async () => {
   try {
-    const response = await api.get('/behaviorTypes')
-    behaviorTypes.value = response.data
+    const response = await api.get('/api/behaviorTypes')
+    behaviorTypes.value = response
   } catch (error) {
     console.error('获取行为类型失败:', error)
     ElMessage.error('获取行为类型失败')
@@ -854,7 +861,7 @@ const handleSubmit = async () => {
     try {
       if (form.value.id) {
         console.log('执行更新操作，ID:', form.value.id)
-        response = await api.put(`/behaviors/${form.value.id}`, requestData)
+        response = await api.put(`/api/behaviors/${form.value.id}`, requestData)
         console.log('更新响应:', response.data)
         
         ElMessage.success({
@@ -864,7 +871,7 @@ const handleSubmit = async () => {
         })
       } else {
         console.log('执行添加操作')
-        response = await api.post('/behaviors', requestData)
+        response = await api.post('/api/behaviors', requestData)
         console.log('添加响应:', response.data)
         
         ElMessage.success({
@@ -937,12 +944,12 @@ const handleDelete = (row) => {
       try {
         console.log('正在删除记录:', row.id)
         
-        const response = await api.delete(`/behaviors/${row.id}`)
+        const response = await api.delete(`/api/behaviors/${row.id}`)
         
         console.log('删除响应:', response)
         
-        // 检查响应状态
-        if (response.status === 204 || (response.status === 200 && response.data)) {
+        // 检查响应状态，204 表示删除成功
+        if (response?.status === 204) {
           // 从本地数据中移除
           const index = behaviors.value.findIndex(b => b.id === row.id)
           if (index !== -1) {
@@ -956,7 +963,9 @@ const handleDelete = (row) => {
             ElMessage.success('删除成功，已刷新列表')
           }
         } else {
-          throw new Error('删除失败：服务器响应异常')
+          // 如果响应状态不是 204，刷新列表以确保数据同步
+          await fetchBehaviors()
+          ElMessage.success('删除成功，已刷新列表')
         }
       } catch (error) {
         console.error('删除行为记录失败:', error)
@@ -992,14 +1001,6 @@ const handleDelete = (row) => {
         if (error.response?.status === 404) {
           await fetchBehaviors()
         }
-        
-        // 记录详细错误信息
-        console.log('删除操作错误详情:', {
-          error,
-          response: error.response,
-          request: error.request,
-          config: error.config
-        })
       }
     })
     .catch(() => {
@@ -1156,7 +1157,7 @@ const handleStartEdit = () => {
 const handleSaveEdit = async () => {
   try {
     submitting.value = true
-    const response = await api.put(`/behaviors/${selectedBehavior.value.id}`, {
+    const response = await api.put(`/api/behaviors/${selectedBehavior.value.id}`, {
       ...selectedBehavior.value,
       process_result: editForm.value.process_result?.trim() || null
     })

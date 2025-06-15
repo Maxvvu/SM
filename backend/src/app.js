@@ -26,35 +26,52 @@ const port = 3001;
 ensureUploadDirectories();
 
 // 中间件配置
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] [REQ] ${req.method} ${req.originalUrl} from ${req.headers['origin'] || req.ip}`);
+  next();
+});
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://wuxiaoyue.top:3000', 'http://wuxiaoyue.top:3001'],
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://wuxiaoyue.top:3000',
+    'http://wuxiaoyue.top:3001'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
   credentials: true,
-  maxAge: 86400 // 预检请求缓存24小时
+  maxAge: 86400,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    console.log(`[${new Date().toISOString()}] [CORS] Preflight for ${req.originalUrl} from ${req.headers['origin']}`);
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
-// 静态文件服务 - 需要在API路由之前配置
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-
-// 前端静态文件服务
-const frontendPath = path.join(__dirname, '../../frontend/dist');
-app.use(express.static(frontendPath, {
-  setHeaders: (res, path) => {
-    if (path.endsWith('.js')) {
+// 静态文件服务 - 上传文件
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  setHeaders: (res, filePath) => {
+    console.log(`[${new Date().toISOString()}] [STATIC] Serving ${filePath}`);
+    if (filePath.endsWith('.js')) {
       res.setHeader('Content-Type', 'application/javascript');
-    } else if (path.endsWith('.css')) {
+    } else if (filePath.endsWith('.css')) {
       res.setHeader('Content-Type', 'text/css');
-    } else if (path.endsWith('.html')) {
+    } else if (filePath.endsWith('.html')) {
       res.setHeader('Content-Type', 'text/html');
     }
   }
 }));
 
-// API路由配置
+// API路由配置 - 必须在静态文件服务之前
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/students', studentRoutes);
@@ -67,9 +84,23 @@ app.use('/api/score-items', scoreItemsRoutes);
 app.use('/api/teacher-behaviors', teacherBehaviorsRoutes);
 app.use('/api/teachers', teacherRoutes);
 
+// 前端静态文件服务 - 在API路由之后
+const frontendPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendPath, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (filePath.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    } else if (filePath.endsWith('.html')) {
+      res.setHeader('Content-Type', 'text/html');
+    }
+  }
+}));
+
 // 错误处理中间件
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error(`[${new Date().toISOString()}] [ERROR]`, err.stack);
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ message: '文件大小不能超过5MB' });
@@ -79,8 +110,13 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: '服务器内部错误' });
 });
 
-// 处理前端路由
-app.get('*', (req, res) => {
+// 处理前端路由 - 只在非API路径时处理
+app.get('*', (req, res, next) => {
+  // 如果是API请求，跳过
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  
   // 检查文件是否存在
   const indexPath = path.join(__dirname, '../../frontend/dist/index.html');
   console.log('尝试访问文件:', indexPath);

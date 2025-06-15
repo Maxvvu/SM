@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <rect width="128" height="128" fill="#409EFF" rx="16"/>
-  <text x="64" y="80" font-size="80" font-family="Arial" fill="white" text-anchor="middle">S</text>
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景圆形 -->
+  <circle cx="16" cy="16" r="16" fill="#409EFF"/>
+  
+  <!-- 书本形状 -->
+  <path d="M8 8h16v16H8z" fill="white"/>
+  
+  <!-- 书本线条 -->
+  <path d="M12 12h8M12 16h8M12 20h8" stroke="#409EFF" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- 装饰元素 -->
+  <circle cx="16" cy="16" r="2" fill="#409EFF"/>
 </svg> 

@@ -128,14 +128,11 @@
           >
             <el-option
               v-for="teacher in teachers"
-              :key="teacher.name"
-              :label="teacher.name"
-              :value="teacher.classes[0]"
+              :key="teacher.value"
+              :label="teacher.label"
+              :value="teacher.value"
             >
-              <span>{{ teacher.name }}</span>
-              <span style="float: right; color: #8492a6; font-size: 13px">
-                {{ teacher.classes.join('、') }}
-              </span>
+              <span>{{ teacher.label }}</span>
             </el-option>
           </el-select>
         </el-form-item>
@@ -148,13 +145,13 @@
           >
             <el-option
               v-for="type in behaviorTypes"
-              :key="type"
-              :label="type"
-              :value="type"
+              :key="type.id"
+              :label="type.name"
+              :value="type.name"
             >
-              <span>{{ type }}</span>
+              <span>{{ type.name }}</span>
               <span style="float: right; color: var(--el-text-color-secondary); font-size: 13px">
-                {{ getScoreByType(type) }}分
+                {{ type.score }}分
               </span>
             </el-option>
           </el-select>
@@ -271,18 +268,18 @@ const refreshTimer = ref(null)
 // 获取行为类型列表
 const fetchBehaviorTypes = async () => {
   try {
-    const response = await api.get('/score-items')
+    const response = await api.get('/api/score-items')
     // 获取所有加减分项
-    const items = response.data
-    behaviorTypes.value = items.map(item => item.name)
-    
-    // 更新分数映射
-    scoreItemsMap.value = new Map(
-      items.map(item => [item.name, item])
-    )
+    const items = response
+    behaviorTypes.value = items.map(item => ({
+      id: item.id,
+      name: item.name,
+      score: item.score,
+      category: item.score > 0 ? '优秀' : item.score < 0 ? '违纪' : '其他'
+    }))
   } catch (error) {
-    console.error('获取行为类型列表失败:', error)
-    ElMessage.error('获取行为类型列表失败')
+    console.error('获取行为类型失败:', error)
+    ElMessage.error('获取行为类型失败')
   }
 }
 
@@ -426,14 +423,14 @@ const paginatedBehaviors = computed(() => {
 const fetchBehaviors = async () => {
   try {
     loading.value = true
-    const response = await api.get('/teacher-behaviors')
-    behaviors.value = response.data.map(behavior => ({
+    const response = await api.get('/api/teacher-behaviors')
+    behaviors.value = response.map(behavior => ({
       ...behavior,
-      date: moment(behavior.date).format('YYYY-MM-DD HH:mm:ss')
+      date: new Date(behavior.date).toISOString().split('T')[0]
     }))
   } catch (error) {
     console.error('获取教师行为记录失败:', error)
-    ElMessage.error('获取数据失败')
+    ElMessage.error('获取教师行为记录失败')
   } finally {
     loading.value = false
   }
@@ -443,42 +440,24 @@ const fetchBehaviors = async () => {
 const fetchTeachers = async () => {
   try {
     // 从学生信息中获取班主任数据
-    const response = await api.get('/students')
-    const students = response.data
+    const response = await api.get('/api/students')
+    const students = response
     
-    // 提取所有不重复的教师信息
-    const teacherMap = new Map()
+    // 提取唯一的班主任信息
+    const teacherSet = new Set()
     students.forEach(student => {
       if (student.teacher) {
-        if (!teacherMap.has(student.teacher)) {
-          teacherMap.set(student.teacher, {
-            name: student.teacher,
-            classes: []
-          })
-        }
-        const teacherData = teacherMap.get(student.teacher)
-        // 将年级转换为高一、高二、高三的格式
-        let gradeText = student.grade
-        if (gradeText.endsWith('级')) {
-          const year = parseInt(gradeText)
-          const currentYear = new Date().getFullYear()
-          const yearDiff = currentYear - year
-          if (yearDiff === 0) gradeText = '高一'
-          else if (yearDiff === 1) gradeText = '高二'
-          else if (yearDiff === 2) gradeText = '高三'
-        }
-        const classInfo = `${gradeText}${student.class}班`
-        if (!teacherData.classes.includes(classInfo)) {
-          teacherData.classes.push(classInfo)
-        }
+        teacherSet.add(student.teacher)
       }
     })
     
-    // 转换为教师列表
-    teachers.value = Array.from(teacherMap.values())
+    teachers.value = Array.from(teacherSet).map(teacher => ({
+      value: teacher,
+      label: teacher
+    }))
   } catch (error) {
-    console.error('获取教师列表失败:', error)
-    ElMessage.error('获取教师列表失败')
+    console.error('获取班主任列表失败:', error)
+    ElMessage.error('获取班主任列表失败')
   }
 }
 
@@ -558,7 +537,7 @@ const handleDelete = (row) => {
   )
     .then(async () => {
       try {
-        await api.delete(`/teacher-behaviors/${row.id}`)
+        await api.delete(`/api/teacher-behaviors/${row.id}`)
         ElMessage.success('删除成功')
             await fetchBehaviors()
       } catch (error) {
@@ -597,7 +576,7 @@ const handleSubmit = async () => {
     let response;
     if (form.value.id) {
       // 编辑
-      response = await api.put(`/teacher-behaviors/${form.value.id}`, submitData)
+      response = await api.put(`/api/teacher-behaviors/${form.value.id}`, submitData)
       ElMessage({
         type: 'success',
         message: '更新成功',
@@ -605,7 +584,7 @@ const handleSubmit = async () => {
       })
     } else {
       // 新增
-      response = await api.post('/teacher-behaviors', submitData)
+      response = await api.post('/api/teacher-behaviors', submitData)
       ElMessage({
         type: 'success',
         message: '添加成功',
@@ -651,8 +630,8 @@ const formatDate = (date) => {
 const getTeacherDisplayName = (className) => {
   // 从教师列表中查找对应班级的教师
   for (const teacher of teachers.value) {
-    if (teacher.classes.includes(className)) {
-      return teacher.name
+    if (teacher.value === className) {
+      return teacher.label
     }
   }
   return className // 如果找不到对应的教师，返回原始值

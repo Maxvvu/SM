@@ -258,17 +258,18 @@ const handleMonthChange = () => {
 
 // 从学生数据中获取教师信息
 const fetchTeachers = async () => {
-  loading.value = true
   try {
+    loading.value = true
+    
     const [studentsResponse, behaviorsResponse, teacherBehaviorsResponse] = await Promise.all([
-      api.get('/students'),
-      api.get('/behaviors'),
-      api.get('/teacher-behaviors')
+      api.get('/api/students'),
+      api.get('/api/behaviors'),
+      api.get('/api/teacher-behaviors')
     ])
     
-    const students = studentsResponse.data
-    behaviors.value = behaviorsResponse.data
-    const teacherBehaviors = teacherBehaviorsResponse.data
+    const students = studentsResponse
+    behaviors.value = behaviorsResponse
+    const teacherBehaviors = teacherBehaviorsResponse
     
     // 提取所有不重复的教师信息
     teacherMap.value = new Map()
@@ -395,7 +396,7 @@ const getTeacherNameFromClass = (className) => {
 const fetchBehaviorTypes = async () => {
   try {
     const response = await api.get('/behaviorTypes')
-    behaviorTypes.value = response.data
+    behaviorTypes.value = response
   } catch (error) {
     console.error('获取行为类型失败:', error)
     ElMessage.error('获取行为类型失败')

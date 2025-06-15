@@ -187,11 +187,11 @@ const negativeItems = computed(() => {
 const fetchItems = async () => {
   try {
     loading.value = true
-    const response = await api.get('/score-items')
-    items.value = response.data
+    const response = await api.get('/api/score-items')
+    items.value = response
   } catch (error) {
-    console.error('获取分项列表失败:', error)
-    ElMessage.error('获取数据失败')
+    console.error('获取加减分项失败:', error)
+    ElMessage.error('获取加减分项失败')
   } finally {
     loading.value = false
   }
@@ -231,11 +231,11 @@ const handleSubmit = async () => {
     submitting.value = true
     if (form.value.id) {
       // 编辑
-      await api.put(`/score-items/${form.value.id}`, form.value)
+      await api.put(`/api/score-items/${form.value.id}`, form.value)
       ElMessage.success('更新成功')
     } else {
       // 新增
-      await api.post('/score-items', form.value)
+      await api.post('/api/score-items', form.value)
       ElMessage.success('添加成功')
     }
     dialogVisible.value = false
@@ -265,7 +265,7 @@ const handleDelete = (row) => {
   )
     .then(async () => {
       try {
-        await api.delete(`/score-items/${row.id}`)
+        await api.delete(`/api/score-items/${row.id}`)
         ElMessage.success('删除成功')
         fetchItems()
       } catch (error) {

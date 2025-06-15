@@ -114,19 +114,16 @@ const fetchData = async () => {
     loading.value = true
     
     // 获取行为记录和学生数据
-    const [behaviorsResponse, studentsResponse] = await Promise.all([
-      api.get('/behaviors', {
+    const [behaviors, students] = await Promise.all([
+      api.get('/api/behaviors', {
         params: {
           grade: selectedGrade.value,
           start_date: dateRange.value?.[0]?.toISOString().split('T')[0],
           end_date: dateRange.value?.[1]?.toISOString().split('T')[0]
         }
       }),
-      api.get('/students')
+      api.get('/api/students')
     ])
-
-    const students = studentsResponse.data
-    const behaviors = behaviorsResponse.data
 
     // 将班主任信息和分数信息添加到行为记录中
     allData.value = behaviors.map(behavior => {
